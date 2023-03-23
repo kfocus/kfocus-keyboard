@@ -1,0 +1,35 @@
+Source: kfocus-keyboard
+Section: admin
+Priority: optional
+Maintainer: Erich Eickmeyer <eeickmeyer@ubuntu.com>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+Standards-Version: 4.6.0
+Homepage: https://kfocus.org
+Vcs-Browser: https://github.com/kfocus/kfocus-keyboard
+Vcs-Git: https://github.com/kfocus/kfocus-keyboard.git
+
+Package: kfocus-keyboard
+Architecture: amd64
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ linux-headers,
+ dkms
+Conflicts: tuxedo-keyboard,
+           tuxedo-keyboard-dkms (<= 2.0.0),
+           tuxedo-wmi-dkms (<= 1.5.1),
+           tuxedo-xp-xc-touchpad-key-fix,
+           tuxedo-touchpad-fix (<= 1.0.8),
+           tuxedo-xp-xc-airplaine-mode-fix (<= 0.6),
+           tuxedo-cc-wmi
+Replaces:  tuxedo-keyboard,
+           tuxedo-keyboard-dkms (<= 2.0.0),
+           tuxedo-xp-xc-touchpad-key-fix,
+           tuxedo-touchpad-fix (<= 1.0.8),
+           tuxedo-xp-xc-airplane-mode-fix (<= 0.6),
+           tuxedo-cc-wmi
+Description: Keyboard driver for Kubuntu Focus notebooks
+ Keyboard & keyboard backlight driver for Kubuntu Focus notebooks.
+ Meant for DKMS framework. Forked from TUXEDO Keyboard driver.

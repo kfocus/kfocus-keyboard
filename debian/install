@@ -1,0 +1,3 @@
+src usr/src/kfocus-keyboard
+Makefile usr/share/kfocus-keyboard
+dkms.conf usr/share/kfocus-keyboard
