@@ -3,13 +3,14 @@
 include /usr/share/dpkg/pkg-info.mk
 
 %:
-	dh $@ --with dkms
+	dh $@
 
 override_dh_install:
-	dh_install src/* usr/src/kfocus-keyboard-$(DEB_VERSION_UPSTREAM)/
-
-override_dh_dkms:
-	dh_dkms -V $(DEB_VERSION_UPSTREAM)
+	mv src_pkg/dkms_postinst src_pkg/postinst
+	dh_install src usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
+	dh_install Makefile usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
+	dh_install dkms.conf usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
+	mv src_pkg/postinst src_pkg/dkms_postinst
 
 override_dh_auto_configure:
 override_dh_auto_build:

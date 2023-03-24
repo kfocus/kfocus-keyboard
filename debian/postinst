@@ -4,12 +4,13 @@
 
 set -e
 
-module=tuxedo-keyboard
+module="tuxedo-keyboard"
 version=3.1.4
 
 
 NAME=${module}
 PACKAGE_NAME=${NAME}
+VERSION=${version}
 
 # From dkms standard postinst
 # Copyright (C) 2002-2005 Flavio Stanchina
@@ -17,13 +18,13 @@ PACKAGE_NAME=${NAME}
 # Copyright (C) 2007 Mario Limonciello
 # Copyright (C) 2009 Alberto Milone
 DEB_NAME=$(echo $PACKAGE_NAME | sed 's,_,-,')
-CVERSION=`dpkg-query -W -f='${Version}' $DEB_NAME | awk -F "-" '{print $1}' | cut -d\: -f2`
+#CVERSION=`dpkg-query -W -f='${Version}' $DEB_NAME | awk -F "-" '{print $1}' | cut -d\: -f2`
 ARCH=`dpkg --print-architecture`
 
 dkms_configure () {
     for POSTINST in /usr/lib/dkms/common.postinst "/usr/share/$PACKAGE_NAME/postinst"; do
         if [ -f "$POSTINST" ]; then
-            "$POSTINST" "$NAME" "$CVERSION" "/usr/share/$PACKAGE_NAME" "$ARCH" "$2"
+            "$POSTINST" "$NAME" "$VERSION" "/usr/share/$PACKAGE_NAME" "$ARCH" "$2"
             return $?
         fi
         echo "WARNING: $POSTINST does not exist." >&2

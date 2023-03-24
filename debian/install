@@ -1,3 +1,2 @@
-src usr/src/kfocus-keyboard
-Makefile usr/share/kfocus-keyboard
-dkms.conf usr/share/kfocus-keyboard
+tuxedo_keyboard.conf usr/share/tuxedo-keyboard/
+src_pkg/postinst usr/share/tuxedo-keyboard/
