@@ -1,3 +1,10 @@
+kfocus-keyboard (3.1.4-0kfocus3) jammy; urgency=medium
+
+  * Patched to support kernels >= 6.4 (#4002)
+  * Validated on all models (#4004)
+
+ -- Michael S. Mikowski <support@kfocus.org>  Sat, 27 Jan 2024 13:30:26 -0800
+
 kfocus-keyboard (3.1.4-0kfocus2) jammy; urgency=medium
 
   * Patch to handle Linux kernel versions >= 6.4.
