@@ -1,3 +1,9 @@
+kfocus-keyboard (3.1.4-0kfocus5) noble; urgency=medium
+
+  * Convert to native package.
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Fri, 31 May 2024 12:15:48 -0500
+
 kfocus-keyboard (3.1.4-0kfocus4) noble; urgency=medium
 
   * No-change rebuild for Noble Numbat.
