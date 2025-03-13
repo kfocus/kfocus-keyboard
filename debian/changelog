@@ -1,3 +1,9 @@
+kfocus-keyboard (3.1.4-0kfocus6~beta1) noble; urgency=medium
+
+  * Patched to support kernels >= 6.11 (#5237)
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Wed, 12 Mar 2025 11:25:55 -0500
+
 kfocus-keyboard (3.1.4-0kfocus5) noble; urgency=medium
 
   * Convert to native package.

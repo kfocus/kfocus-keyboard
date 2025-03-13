@@ -16,6 +16,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this software.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+#include <linux/version.h>
+
 #include "tuxedo_keyboard_common.h"
 #include "clevo_interfaces.h"
 
@@ -789,10 +792,16 @@ static void clevo_keyboard_remove_device_interface(struct platform_device *dev)
 	}
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 static int clevo_keyboard_remove(struct platform_device *dev)
+#else
+static void clevo_keyboard_remove(struct platform_device *dev)
+#endif
 {
 	clevo_keyboard_remove_device_interface(dev);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 	return 0;
+#endif
 }
 
 static int clevo_keyboard_suspend(struct platform_device *dev, pm_message_t state)
