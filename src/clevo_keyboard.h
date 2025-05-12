@@ -29,7 +29,8 @@
 #define REGION_LEFT                     0xF0000000
 #define REGION_CENTER                   0xF1000000
 #define REGION_RIGHT                    0xF2000000
-#define REGION_EXTRA                    0xF3000000
+#define REGION_EXTRA1                   0xF3000000
+#define REGION_EXTRA2                   0xF6000000
 
 #define KEYBOARD_BRIGHTNESS             0xF4000000
 
@@ -127,7 +128,7 @@ u32 clevo_keyboard_remove_interface(struct clevo_interface_t *interface)
 		tuxedo_keyboard_remove_driver(&clevo_keyboard_driver);
 		active_clevo_interface = NULL;
 	}
-		
+
 
 	mutex_unlock(&clevo_keyboard_interface_modification_lock);
 
@@ -171,14 +172,16 @@ static struct key_entry clevo_keymap[] = {
 
 // Keyboard struct
 struct kbd_led_state_t {
-	u8 has_extra;
+	u8 has_extra1;
+	u8 has_extra2;
 	u8 enabled;
 
 	struct {
 		u32 left;
 		u32 center;
 		u32 right;
-		u32 extra;
+		u32 extra1;
+	  u32 extra2;
 	} color;
 
 	u8 brightness;
@@ -194,7 +197,7 @@ struct blinking_pattern_t {
 
 
 static int blinking_pattern_id_validator(const char *value,
-                                         const struct kernel_param *blinking_pattern_param);
+	                                       const struct kernel_param *blinking_pattern_param);
 static const struct kernel_param_ops param_ops_mode_ops = {
 	.set = blinking_pattern_id_validator,
 	.get = param_get_int,
@@ -212,9 +215,13 @@ static uint param_color_right = KB_COLOR_DEFAULT;
 module_param_named(color_right, param_color_right, uint, S_IRUSR);
 MODULE_PARM_DESC(color_right, "Color for the Right Region");
 
-static uint param_color_extra = KB_COLOR_DEFAULT;
-module_param_named(color_extra, param_color_extra, uint, S_IRUSR);
-MODULE_PARM_DESC(color_extra, "Color for the Extra Region");
+static uint param_color_extra1 = KB_COLOR_DEFAULT;
+module_param_named(color_extra1, param_color_extra1, uint, S_IRUSR);
+MODULE_PARM_DESC(color_extra1, "Color for the Extra1 Region");
+
+static uint param_color_extra2 = KB_COLOR_DEFAULT;
+module_param_named(color_extra2, param_color_extra2, uint, S_IRUSR);
+MODULE_PARM_DESC(color_extra2, "Color for the Extra2 Region");
 
 static ushort param_blinking_pattern = DEFAULT_BLINKING_PATTERN;
 module_param_cb(mode, &param_ops_mode_ops, &param_blinking_pattern, S_IRUSR);
@@ -226,11 +233,13 @@ MODULE_PARM_DESC(state,
 		 "Set the State of the Keyboard TRUE = ON | FALSE = OFF");
 
 static struct kbd_led_state_t kbd_led_state = {
-	.has_extra = 0,
+	.has_extra1 = 0,
+	.has_extra2 = 0,
 	.enabled = 1,
 	.color = {
 	        .left = KB_COLOR_DEFAULT, .center = KB_COLOR_DEFAULT,
-	        .right = KB_COLOR_DEFAULT, .extra = KB_COLOR_DEFAULT
+	        .right = KB_COLOR_DEFAULT, .extra1 = KB_COLOR_DEFAULT,
+	        .extra2 = KB_COLOR_DEFAULT,
 	         },
 	.brightness = BRIGHTNESS_DEFAULT,
 	.blinking_pattern = DEFAULT_BLINKING_PATTERN,
@@ -238,14 +247,14 @@ static struct kbd_led_state_t kbd_led_state = {
 };
 
 static struct blinking_pattern_t blinking_patterns[] = {
-        { .key = 0,.value = 0,.name = "CUSTOM"},
-        { .key = 1,.value = 0x1002a000,.name = "BREATHE"},
-        { .key = 2,.value = 0x33010000,.name = "CYCLE"},
-        { .key = 3,.value = 0x80000000,.name = "DANCE"},
-        { .key = 4,.value = 0xA0000000,.name = "FLASH"},
-        { .key = 5,.value = 0x70000000,.name = "RANDOM_COLOR"},
-        { .key = 6,.value = 0x90000000,.name = "TEMPO"},
-        { .key = 7,.value = 0xB0000000,.name = "WAVE"}
+	      { .key = 0,.value = 0,.name = "CUSTOM"},
+	      { .key = 1,.value = 0x1002a000,.name = "BREATHE"},
+	      { .key = 2,.value = 0x33010000,.name = "CYCLE"},
+	      { .key = 3,.value = 0x80000000,.name = "DANCE"},
+	      { .key = 4,.value = 0xA0000000,.name = "FLASH"},
+	      { .key = 5,.value = 0x70000000,.name = "RANDOM_COLOR"},
+	      { .key = 6,.value = 0x90000000,.name = "TEMPO"},
+	      { .key = 7,.value = 0xB0000000,.name = "WAVE"}
 };
 
 // Sysfs Interface Methods
@@ -277,11 +286,18 @@ static ssize_t show_color_right_fs(struct device *child,
 	return sprintf(buffer, "%06x\n", kbd_led_state.color.right);
 }
 
-// Sysfs Interface for the color of the extra region (Color as hexvalue)
-static ssize_t show_color_extra_fs(struct device *child,
+// Sysfs Interface for the color of the extra1 region (Color as hexvalue)
+static ssize_t show_color_extra1_fs(struct device *child,
 				   struct device_attribute *attr, char *buffer)
 {
-	return sprintf(buffer, "%06x\n", kbd_led_state.color.extra);
+	return sprintf(buffer, "%06x\n", kbd_led_state.color.extra1);
+}
+
+// Sysfs Interface for the color of the extra2 region (Color as hexvalue)
+static ssize_t show_color_extra2_fs(struct device *child,
+				   struct device_attribute *attr, char *buffer)
+{
+	return sprintf(buffer, "%06x\n", kbd_led_state.color.extra2);
 }
 
 // Sysfs Interface for the keyboard brightness (unsigned int)
@@ -293,16 +309,23 @@ static ssize_t show_brightness_fs(struct device *child,
 
 // Sysfs Interface for the backlight blinking pattern
 static ssize_t show_blinking_patterns_fs(struct device *child, struct device_attribute *attr,
-                                         char *buffer)
+	                                       char *buffer)
 {
 	return sprintf(buffer, "%d\n", kbd_led_state.blinking_pattern);
 }
 
-// Sysfs Interface for if the keyboard has extra region
-static ssize_t show_hasextra_fs(struct device *child,
+// Sysfs Interface for if the keyboard has extra1 region
+static ssize_t show_hasextra1_fs(struct device *child,
 				struct device_attribute *attr, char *buffer)
 {
-	return sprintf(buffer, "%d\n", kbd_led_state.has_extra);
+	return sprintf(buffer, "%d\n", kbd_led_state.has_extra1);
+}
+
+// Sysfs Interface for if the keyboard has extra2 region
+static ssize_t show_hasextra2_fs(struct device *child,
+				struct device_attribute *attr, char *buffer)
+{
+	return sprintf(buffer, "%d\n", kbd_led_state.has_extra2);
 }
 
 u32 clevo_evaluate_method(u8 cmd, u32 arg, u32 *result)
@@ -337,8 +360,8 @@ static void set_brightness(u8 brightness)
 }
 
 static ssize_t set_brightness_fs(struct device *child,
-                                 struct device_attribute *attr,
-                                 const char *buffer, size_t size)
+	                               struct device_attribute *attr,
+	                               const char *buffer, size_t size)
 {
 	unsigned int val;
 	// hier unsigned?
@@ -419,9 +442,12 @@ static int set_color_code_region(u32 region, u32 colorcode)
 		case REGION_RIGHT:
 			kbd_led_state.color.right = colorcode;
 			break;
-		case REGION_EXTRA:
-			kbd_led_state.color.extra = colorcode;
+		case REGION_EXTRA1:
+			kbd_led_state.color.extra1 = colorcode;
 			break;
+	  case REGION_EXTRA2:
+	    kbd_led_state.color.extra2 = colorcode;
+	    break;
 		}
 	}
 
@@ -450,9 +476,12 @@ static int set_color_string_region(const char *color_string, size_t size, u32 re
 		case REGION_RIGHT:
 			kbd_led_state.color.right = colorcode;
 			break;
-		case REGION_EXTRA:
-			kbd_led_state.color.extra = colorcode;
+		case REGION_EXTRA1:
+			kbd_led_state.color.extra1 = colorcode;
 			break;
+	  case REGION_EXTRA2:
+	    kbd_led_state.color.extra2 = colorcode;
+	    break;
 		}
 	}
 
@@ -480,11 +509,18 @@ static ssize_t set_color_right_fs(struct device *child,
 	return set_color_string_region(color_string, size, REGION_RIGHT);
 }
 
-static ssize_t set_color_extra_fs(struct device *child,
+static ssize_t set_color_extra1_fs(struct device *child,
 				  struct device_attribute *attr,
 				  const char *color_string, size_t size)
 {
-	return set_color_string_region(color_string, size, REGION_EXTRA);
+	return set_color_string_region(color_string, size, REGION_EXTRA1);
+}
+
+static ssize_t set_color_extra2_fs(struct device *child,
+				  struct device_attribute *attr,
+				  const char *color_string, size_t size)
+{
+	return set_color_string_region(color_string, size, REGION_EXTRA2);
 }
 
 static int set_next_color_whole_kb(void)
@@ -499,14 +535,19 @@ static int set_next_color_whole_kb(void)
 	}
 	new_color_code = color_list.colors[new_color_id].code;
 
-	TUXEDO_INFO("set_next_color_whole_kb(): new_color_id: %i, new_color_code %X", 
+	TUXEDO_INFO("set_next_color_whole_kb(): new_color_id: %i, new_color_code %X",
 		    new_color_id, new_color_code);
 
-	/* Set color on all four regions*/
+	/* Set color on all five regions */
 	set_color_code_region(REGION_LEFT,   new_color_code);
 	set_color_code_region(REGION_CENTER, new_color_code);
 	set_color_code_region(REGION_RIGHT,  new_color_code);
-	set_color_code_region(REGION_EXTRA,  new_color_code);
+	if (kbd_led_state.has_extra1 == 1) {
+		set_color_code_region(REGION_EXTRA1,  new_color_code);
+	}
+	if (kbd_led_state.has_extra2 == 1) {
+		set_color_code_region(REGION_EXTRA2,  new_color_code);
+	}
 
 	kbd_led_state.whole_kbd_color = new_color_id;
 
@@ -529,15 +570,18 @@ static void set_blinking_pattern(u8 blinkling_pattern)
 		set_color(REGION_CENTER, kbd_led_state.color.center);
 		set_color(REGION_RIGHT, kbd_led_state.color.right);
 
-		if (kbd_led_state.has_extra == 1) {
-			set_color(REGION_EXTRA, kbd_led_state.color.extra);
+		if (kbd_led_state.has_extra1 == 1) {
+			set_color(REGION_EXTRA1, kbd_led_state.color.extra1);
 		}
+	  if (kbd_led_state.has_extra2 == 1) {
+	    set_color(REGION_EXTRA2, kbd_led_state.color.extra2);
+	  }
 	}
 }
 
 static ssize_t set_blinking_pattern_fs(struct device *child,
-                                       struct device_attribute *attr,
-                                       const char *buffer, size_t size)
+	                                     struct device_attribute *attr,
+	                                     const char *buffer, size_t size)
 {
 	unsigned int blinking_pattern;
 
@@ -553,7 +597,7 @@ static ssize_t set_blinking_pattern_fs(struct device *child,
 }
 
 static int blinking_pattern_id_validator(const char *value,
-                                         const struct kernel_param *blinking_pattern_param)
+	                                       const struct kernel_param *blinking_pattern_param)
 {
 	int blinking_pattern = 0;
 
@@ -567,7 +611,7 @@ static int blinking_pattern_id_validator(const char *value,
 }
 
 static int brightness_validator(const char *value,
-                                const struct kernel_param *brightness_param)
+	                              const struct kernel_param *brightness_param)
 {
 	int brightness = 0;
 
@@ -639,10 +683,12 @@ static DEVICE_ATTR(color_left, 0644, show_color_left_fs, set_color_left_fs);
 static DEVICE_ATTR(color_center, 0644, show_color_center_fs,
 		   set_color_center_fs);
 static DEVICE_ATTR(color_right, 0644, show_color_right_fs, set_color_right_fs);
-static DEVICE_ATTR(color_extra, 0644, show_color_extra_fs, set_color_extra_fs);
+static DEVICE_ATTR(color_extra1, 0644, show_color_extra1_fs, set_color_extra1_fs);
+static DEVICE_ATTR(color_extra2, 0644, show_color_extra2_fs, set_color_extra2_fs);
 static DEVICE_ATTR(brightness, 0644, show_brightness_fs, set_brightness_fs);
 static DEVICE_ATTR(mode, 0644, show_blinking_patterns_fs, set_blinking_pattern_fs);
-static DEVICE_ATTR(extra, 0444, show_hasextra_fs, NULL);
+static DEVICE_ATTR(extra1, 0444, show_hasextra1_fs, NULL);
+static DEVICE_ATTR(extra2, 0444, show_hasextra2_fs, NULL);
 
 static void clevo_keyboard_init_device_interface(struct platform_device *dev)
 {
@@ -669,25 +715,46 @@ static void clevo_keyboard_init_device_interface(struct platform_device *dev)
 		    ("Sysfs attribute file creation failed for color right\n");
 	}
 
-	if (set_color(REGION_EXTRA, KB_COLOR_DEFAULT) != 0) {
-		TUXEDO_DEBUG("Keyboard does not support EXTRA Color");
-		kbd_led_state.has_extra = 0;
+	if (set_color(REGION_EXTRA1, KB_COLOR_DEFAULT) != 0) {
+		TUXEDO_DEBUG("Keyboard does not support EXTRA1 Color");
+		kbd_led_state.has_extra1 = 0;
 	} else {
-		kbd_led_state.has_extra = 1;
+		kbd_led_state.has_extra1 = 1;
 		if (device_create_file
 		    (&dev->dev,
-		     &dev_attr_color_extra) != 0) {
+		     &dev_attr_color_extra1) != 0) {
 			TUXEDO_ERROR
-			    ("Sysfs attribute file creation failed for color extra\n");
+			    ("Sysfs attribute file creation failed for color extra1\n");
 		}
 
-		set_color(REGION_EXTRA, param_color_extra);
+		set_color(REGION_EXTRA1, param_color_extra1);
 	}
 
-	if (device_create_file(&dev->dev, &dev_attr_extra) !=
+	if (set_color(REGION_EXTRA2, KB_COLOR_DEFAULT) != 0) {
+		TUXEDO_DEBUG("Keyboard does not support EXTRA2 Color");
+		kbd_led_state.has_extra2 = 0;
+	} else {
+		kbd_led_state.has_extra2 = 1;
+		if (device_create_file
+		    (&dev->dev,
+		     &dev_attr_color_extra2) != 0) {
+			TUXEDO_ERROR
+			    ("Sysfs attribute file creation failed for color extra2\n");
+		}
+
+		set_color(REGION_EXTRA2, param_color_extra2);
+	}
+
+	if (device_create_file(&dev->dev, &dev_attr_extra1) !=
 	    0) {
 		TUXEDO_ERROR
-		    ("Sysfs attribute file creation failed for extra information flag\n");
+		    ("Sysfs attribute file creation failed for extra1 information flag\n");
+	}
+
+	if (device_create_file(&dev->dev, &dev_attr_extra2) !=
+	    0) {
+		TUXEDO_ERROR
+		    ("Sysfs attribute file creation failed for extra2 information flag\n");
 	}
 
 	if (device_create_file(&dev->dev, &dev_attr_mode) !=
@@ -735,7 +802,8 @@ int clevo_keyboard_init(void)
 	kbd_led_state.color.left = param_color_left;
 	kbd_led_state.color.center = param_color_center;
 	kbd_led_state.color.right = param_color_right;
-	kbd_led_state.color.extra = param_color_extra;
+	kbd_led_state.color.extra1 = param_color_extra1;
+	kbd_led_state.color.extra2 = param_color_extra2;
 
 	kbd_led_state.blinking_pattern = param_blinking_pattern;
 
@@ -783,12 +851,16 @@ static void clevo_keyboard_remove_device_interface(struct platform_device *dev)
 	device_remove_file(&dev->dev, &dev_attr_color_left);
 	device_remove_file(&dev->dev, &dev_attr_color_center);
 	device_remove_file(&dev->dev, &dev_attr_color_right);
-	device_remove_file(&dev->dev, &dev_attr_extra);
+	device_remove_file(&dev->dev, &dev_attr_extra1);
+	device_remove_file(&dev->dev, &dev_attr_extra2);
 	device_remove_file(&dev->dev, &dev_attr_mode);
 	device_remove_file(&dev->dev, &dev_attr_brightness);
 
-	if (kbd_led_state.has_extra == 1) {
-		device_remove_file(&dev->dev, &dev_attr_color_extra);
+	if (kbd_led_state.has_extra1 == 1) {
+		device_remove_file(&dev->dev, &dev_attr_color_extra1);
+	}
+	if (kbd_led_state.has_extra2 == 1) {
+		device_remove_file(&dev->dev, &dev_attr_color_extra2);
 	}
 }
 
