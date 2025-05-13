@@ -720,7 +720,9 @@ void clevo_keyboard_write_state(void)
 	// - set_brightness, set_enabled, set_blinking_pattern
 	//   still also update state
 	set_blinking_pattern(kbd_led_state.blinking_pattern);
-	set_brightness(kbd_led_state.brightness);
+  if (kbd_led_state.enabled == 1) {
+	  set_brightness(kbd_led_state.brightness);
+  }
 	set_enabled(kbd_led_state.enabled);
 }
 
