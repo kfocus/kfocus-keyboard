@@ -127,7 +127,7 @@ u32 clevo_keyboard_remove_interface(struct clevo_interface_t *interface)
 		tuxedo_keyboard_remove_driver(&clevo_keyboard_driver);
 		active_clevo_interface = NULL;
 	}
-		
+
 
 	mutex_unlock(&clevo_keyboard_interface_modification_lock);
 
@@ -194,7 +194,7 @@ struct blinking_pattern_t {
 
 
 static int blinking_pattern_id_validator(const char *value,
-                                         const struct kernel_param *blinking_pattern_param);
+	                                       const struct kernel_param *blinking_pattern_param);
 static const struct kernel_param_ops param_ops_mode_ops = {
 	.set = blinking_pattern_id_validator,
 	.get = param_get_int,
@@ -238,14 +238,14 @@ static struct kbd_led_state_t kbd_led_state = {
 };
 
 static struct blinking_pattern_t blinking_patterns[] = {
-        { .key = 0,.value = 0,.name = "CUSTOM"},
-        { .key = 1,.value = 0x1002a000,.name = "BREATHE"},
-        { .key = 2,.value = 0x33010000,.name = "CYCLE"},
-        { .key = 3,.value = 0x80000000,.name = "DANCE"},
-        { .key = 4,.value = 0xA0000000,.name = "FLASH"},
-        { .key = 5,.value = 0x70000000,.name = "RANDOM_COLOR"},
-        { .key = 6,.value = 0x90000000,.name = "TEMPO"},
-        { .key = 7,.value = 0xB0000000,.name = "WAVE"}
+	      { .key = 0,.value = 0,.name = "CUSTOM"},
+	      { .key = 1,.value = 0x1002a000,.name = "BREATHE"},
+	      { .key = 2,.value = 0x33010000,.name = "CYCLE"},
+	      { .key = 3,.value = 0x80000000,.name = "DANCE"},
+	      { .key = 4,.value = 0xA0000000,.name = "FLASH"},
+	      { .key = 5,.value = 0x70000000,.name = "RANDOM_COLOR"},
+	      { .key = 6,.value = 0x90000000,.name = "TEMPO"},
+	      { .key = 7,.value = 0xB0000000,.name = "WAVE"}
 };
 
 // Sysfs Interface Methods
@@ -293,7 +293,7 @@ static ssize_t show_brightness_fs(struct device *child,
 
 // Sysfs Interface for the backlight blinking pattern
 static ssize_t show_blinking_patterns_fs(struct device *child, struct device_attribute *attr,
-                                         char *buffer)
+	                                       char *buffer)
 {
 	return sprintf(buffer, "%d\n", kbd_led_state.blinking_pattern);
 }
@@ -333,12 +333,17 @@ static void set_brightness(u8 brightness)
 	if (!clevo_evaluate_method
 	    (CLEVO_METHOD_ID_SET_KB_LEDS, 0xF4000000 | brightness, NULL)) {
 		kbd_led_state.brightness = brightness;
+	  if (brightness != 0) {
+	    kbd_led_state.enabled = 1;
+	  } else {
+	    kbd_led_state.enabled = 0;
+	  }
 	}
 }
 
 static ssize_t set_brightness_fs(struct device *child,
-                                 struct device_attribute *attr,
-                                 const char *buffer, size_t size)
+	                               struct device_attribute *attr,
+	                               const char *buffer, size_t size)
 {
 	unsigned int val;
 	// hier unsigned?
@@ -356,16 +361,21 @@ static ssize_t set_brightness_fs(struct device *child,
 
 static int set_enabled_cmd(u8 state)
 {
-	u32 cmd = 0xE0000000;
+	//u32 cmd = 0xE0000000;
 	TUXEDO_INFO("Set keyboard enabled to: %d\n", state);
 
-	if (state == 0) {
-		cmd |= 0x003001;
-	} else {
-		cmd |= 0x07F001;
-	}
+	//if (state == 0) {
+		//cmd |= 0x003001;
+	//} else {
+		//cmd |= 0x07F001;
+	//}
 
-	return clevo_evaluate_method(CLEVO_METHOD_ID_SET_KB_LEDS, cmd, NULL);
+	//return clevo_evaluate_method(CLEVO_METHOD_ID_SET_KB_LEDS, cmd, NULL);
+	if (state == 0) {
+	  return clevo_evaluate_method(CLEVO_METHOD_ID_SET_KB_LEDS, 0xF4000000, NULL);
+	} else {
+	  return clevo_evaluate_method(CLEVO_METHOD_ID_SET_KB_LEDS, 0xF4000000 | kbd_led_state.brightness, NULL);
+	}
 }
 
 static void set_enabled(u8 state)
@@ -499,7 +509,7 @@ static int set_next_color_whole_kb(void)
 	}
 	new_color_code = color_list.colors[new_color_id].code;
 
-	TUXEDO_INFO("set_next_color_whole_kb(): new_color_id: %i, new_color_code %X", 
+	TUXEDO_INFO("set_next_color_whole_kb(): new_color_id: %i, new_color_code %X",
 		    new_color_id, new_color_code);
 
 	/* Set color on all four regions*/
@@ -536,8 +546,8 @@ static void set_blinking_pattern(u8 blinkling_pattern)
 }
 
 static ssize_t set_blinking_pattern_fs(struct device *child,
-                                       struct device_attribute *attr,
-                                       const char *buffer, size_t size)
+	                                     struct device_attribute *attr,
+	                                     const char *buffer, size_t size)
 {
 	unsigned int blinking_pattern;
 
@@ -553,7 +563,7 @@ static ssize_t set_blinking_pattern_fs(struct device *child,
 }
 
 static int blinking_pattern_id_validator(const char *value,
-                                         const struct kernel_param *blinking_pattern_param)
+	                                       const struct kernel_param *blinking_pattern_param)
 {
 	int blinking_pattern = 0;
 
@@ -567,7 +577,7 @@ static int blinking_pattern_id_validator(const char *value,
 }
 
 static int brightness_validator(const char *value,
-                                const struct kernel_param *brightness_param)
+	                              const struct kernel_param *brightness_param)
 {
 	int brightness = 0;
 

@@ -1,3 +1,9 @@
+kfocus-keyboard (3.1.4-0kfocus6~beta2) noble; urgency=medium
+
+  * Test driver
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Tue, 13 May 2025 14:59:54 -0500
+
 kfocus-keyboard (3.1.4-0kfocus6~beta1) noble; urgency=medium
 
   * Patched to support kernels >= 6.11 (#5237)
