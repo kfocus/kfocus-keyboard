@@ -1,8 +1,8 @@
 kfocus-keyboard (3.1.4-0kfocus6~beta2) noble; urgency=medium
 
-  * Test driver
+  * Fix keyboard LED power switch for M2G6 (#5413)
 
- -- Aaron Rainbolt <arainbolt@kfocus.org>  Tue, 13 May 2025 14:59:54 -0500
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Wed, 14 May 2025 11:42:06 -0500
 
 kfocus-keyboard (3.1.4-0kfocus6~beta1) noble; urgency=medium
 
