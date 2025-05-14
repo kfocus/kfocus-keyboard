@@ -1,3 +1,9 @@
+kfocus-keyboard (3.1.4-0kfocus6~beta3) noble; urgency=medium
+
+  * Remove black color from preset color list
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Wed, 14 May 2025 17:34:24 -0500
+
 kfocus-keyboard (3.1.4-0kfocus6~beta2) noble; urgency=medium
 
   * Fix keyboard LED power switch for M2G6 (#5413)

@@ -89,22 +89,21 @@ struct color_list_t {
  * Commonly used standard colors
  */
 static struct color_list_t color_list = {
-	.size = 8,
+	.size = 7,
 	.colors = {
-		{ .name = "BLACK",    .code = 0x000000 },  // 0
-		{ .name = "RED",      .code = 0xFF0000 },  // 1
-		{ .name = "GREEN",    .code = 0x00FF00 },  // 2
-		{ .name = "BLUE",     .code = 0x0000FF },  // 3
-		{ .name = "YELLOW",   .code = 0xFFFF00 },  // 4
-		{ .name = "MAGENTA",  .code = 0xFF00FF },  // 5
-		{ .name = "CYAN",     .code = 0x00FFFF },  // 6
-		{ .name = "WHITE",    .code = 0xFFFFFF },  // 7
+		{ .name = "RED",      .code = 0xFF0000 },  // 0
+		{ .name = "GREEN",    .code = 0x00FF00 },  // 1
+		{ .name = "BLUE",     .code = 0x0000FF },  // 2
+		{ .name = "YELLOW",   .code = 0xFFFF00 },  // 3
+		{ .name = "MAGENTA",  .code = 0xFF00FF },  // 4
+		{ .name = "CYAN",     .code = 0x00FFFF },  // 5
+		{ .name = "WHITE",    .code = 0xFFFFFF },  // 6
 	}
 };
 
 /**
  * Looks up a color in the color_list
- * 
+ *
  * Returns found color value, or 0xffffffff if string did not match
  */
 static u32 color_lookup(const struct color_list_t *color_list, const char *color_name)
