@@ -73,7 +73,7 @@ static u32 uw_wmi_ec_evaluate(u8 addr_low, u8 addr_high, u8 data_low, u8 data_hi
 	if (read_flag != 0) {
 		wmi_arg_bytes[5] = 0x01;
 	}
-	
+
 	status = wmi_evaluate_method(UNIWILL_WMI_MGMT_GUID_BC, wmi_instance, wmi_method_id, &wmi_in, &wmi_out);
 	out_acpi = (union acpi_object *) wmi_out.pointer;
 
@@ -302,7 +302,7 @@ static int uniwill_wmi_probe(struct wmi_device *wdev, const void *dummy_context)
 		wmi_has_guid(UNIWILL_WMI_MGMT_GUID_BA) &&
 		wmi_has_guid(UNIWILL_WMI_MGMT_GUID_BB) &&
 		wmi_has_guid(UNIWILL_WMI_MGMT_GUID_BC);
-	
+
 	if (!status) {
 		pr_debug("probe: At least one Uniwill GUID missing\n");
 		return -ENODEV;

@@ -4,7 +4,8 @@ Priority: optional
 Maintainer: Erich Eickmeyer <eeickmeyer@ubuntu.com>
 Rules-Requires-Root: no
 Build-Depends:
- debhelper-compat (= 13)
+ debhelper-compat (= 13),
+ dh-sequence-dkms
 Standards-Version: 4.6.0
 Homepage: https://kfocus.org
 Vcs-Browser: https://github.com/kfocus/kfocus-keyboard

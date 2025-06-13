@@ -1,47 +1,17 @@
 #!/bin/sh
 # Copyright (c) 2020 TUXEDO Computers GmbH
-# Copyright (c) 2023 Mindshare
+# Copyright (c) 2023, 2025 Mindshare
 
 set -e
 
-module="tuxedo-keyboard"
-version=3.1.4
-
-
-NAME=${module}
-PACKAGE_NAME=${NAME}
-VERSION=${version}
-
-# From dkms standard postinst
-# Copyright (C) 2002-2005 Flavio Stanchina
-# Copyright (C) 2005-2006 Aric Cyr
-# Copyright (C) 2007 Mario Limonciello
-# Copyright (C) 2009 Alberto Milone
-DEB_NAME=$(echo $PACKAGE_NAME | sed 's,_,-,')
-#CVERSION=`dpkg-query -W -f='${Version}' $DEB_NAME | awk -F "-" '{print $1}' | cut -d\: -f2`
-ARCH=`dpkg --print-architecture`
-
-dkms_configure () {
-    for POSTINST in /usr/lib/dkms/common.postinst "/usr/share/$PACKAGE_NAME/postinst"; do
-        if [ -f "$POSTINST" ]; then
-            "$POSTINST" "$NAME" "$VERSION" "/usr/share/$PACKAGE_NAME" "$ARCH" "$2"
-            return $?
-        fi
-        echo "WARNING: $POSTINST does not exist." >&2
-    done
-    echo "ERROR: DKMS version is too old and $PACKAGE_NAME was not" >&2
-    echo "built with legacy DKMS support." >&2
-    echo "You must either rebuild $PACKAGE_NAME with legacy postinst" >&2
-    echo "support or upgrade DKMS to a more current version." >&2
-    return 1
-}
-
-# End dkms standard postinst
+#DEBHELPER#
 
 case "$1" in
     configure)
-        # Run standard dkms build/install for all kernels with headers installed
-        dkms_configure
+        # Install default config if none exist already
+        if [ ! -f "/etc/modprobe.d/tuxedo_keyboard.conf" ]; then
+            cp -f /usr/share/tuxedo-keyboard/tuxedo_keyboard.conf /etc/modprobe.d/tuxedo_keyboard.conf
+        fi
 
         # Attempt to (re-)load module immediately, fail silently if not possible at this stage
 
@@ -53,7 +23,7 @@ case "$1" in
             TCCD_RUNNING=false
         fi
 
-        if $TCCD_RUNNING; then
+        if [ "$TCCD_RUNNING" = 'true' ]; then
             echo "Stop tccd temporarily"
             systemctl stop tccd 2>&1 || true
         fi
@@ -64,7 +34,7 @@ case "$1" in
         rmmod clevo_wmi > /dev/null 2>&1 || true
         rmmod clevo_acpi > /dev/null 2>&1 || true
         rmmod tuxedo_keyboard > /dev/null 2>&1 || true
-        
+
         modprobe tuxedo_keyboard > /dev/null 2>&1 || true
         modprobe uniwill_wmi > /dev/null 2>&1 || true
         modprobe clevo_wmi > /dev/null 2>&1 || true
@@ -76,12 +46,6 @@ case "$1" in
             echo "Start tccd again"
             systemctl start tccd 2>&1 || true
         fi
-
-        # Install default config if none exist already
-        if [ ! -f "/etc/modprobe.d/tuxedo_keyboard.conf" ]; then
-            cp -f /usr/share/tuxedo-keyboard/tuxedo_keyboard.conf /etc/modprobe.d/tuxedo_keyboard.conf
-        fi
-
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
@@ -92,7 +56,3 @@ case "$1" in
         exit 1
     ;;
 esac
-
-exit 0
-
-#DEBHELPER#

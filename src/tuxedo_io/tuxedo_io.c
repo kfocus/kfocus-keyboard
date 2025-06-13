@@ -181,7 +181,7 @@ static long clevo_ioctl_interface(struct file *file, unsigned int cmd, unsigned 
 
 	const char str_no_if[] = "";
 	char *str_clevo_if;
-	
+
 	switch (cmd) {
 		case R_CL_HW_IF_STR:
 			if (clevo_get_active_interface_id(&str_clevo_if) == 0) {
@@ -836,7 +836,7 @@ static int __init tuxedo_io_init(void)
 
 	device_create(tuxedo_io_device_class, NULL, tuxedo_io_device_handle, NULL, "tuxedo_io");
 	pr_debug("Module init successful\n");
-	
+
 	return 0;
 }
 

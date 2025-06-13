@@ -1,3 +1,10 @@
+kfocus-keyboard (3.1.4-0kfocus6~beta4) noble; urgency=medium
+
+  * Fix DKMS upgrade failure when upgrading kfocus-keyboard and the kernel at
+    the same time
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Fri, 13 Jun 2025 12:53:29 -0500
+
 kfocus-keyboard (3.1.4-0kfocus6~beta3) noble; urgency=medium
 
   * Remove black color from preset color list

@@ -131,7 +131,7 @@ static void __exit tuxedo_input_exit(void)
 void tuxedo_keyboard_remove_driver(struct tuxedo_keyboard_driver *tk_driver)
 {
 	bool specified_driver_differ_from_used =
-		tk_driver != NULL && 
+		tk_driver != NULL &&
 		(
 			strcmp(
 				tk_driver->platform_driver->driver.name,

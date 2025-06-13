@@ -12,6 +12,11 @@ override_dh_install:
 	dh_install dkms.conf usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
 	mv src_pkg/postinst src_pkg/dkms_postinst
 
+# This is present in tuxedo-drivers, but is probably not required for
+# kfocus-keyboard.
+# override_dh_dkms:
+#	dh_dkms -V
+
 override_dh_auto_configure:
 override_dh_auto_build:
 override_dh_auto_test:
