@@ -1,27 +1,12 @@
-kfocus-keyboard (3.1.4-0kfocus6~beta4) noble; urgency=medium
+kfocus-keyboard (3.1.4-0kfocus6) noble; urgency=medium
 
   * Fix DKMS upgrade failure when upgrading kfocus-keyboard and the kernel at
     the same time
-
- -- Aaron Rainbolt <arainbolt@kfocus.org>  Fri, 13 Jun 2025 12:53:29 -0500
-
-kfocus-keyboard (3.1.4-0kfocus6~beta3) noble; urgency=medium
-
   * Remove black color from preset color list
-
- -- Aaron Rainbolt <arainbolt@kfocus.org>  Wed, 14 May 2025 17:34:24 -0500
-
-kfocus-keyboard (3.1.4-0kfocus6~beta2) noble; urgency=medium
-
   * Fix keyboard LED power switch for M2G6 (#5413)
-
- -- Aaron Rainbolt <arainbolt@kfocus.org>  Wed, 14 May 2025 11:42:06 -0500
-
-kfocus-keyboard (3.1.4-0kfocus6~beta1) noble; urgency=medium
-
   * Patched to support kernels >= 6.11 (#5237)
 
- -- Aaron Rainbolt <arainbolt@kfocus.org>  Wed, 12 Mar 2025 11:25:55 -0500
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Fri, 27 Jun 2025 13:03:49 -0500
 
 kfocus-keyboard (3.1.4-0kfocus5) noble; urgency=medium
 
