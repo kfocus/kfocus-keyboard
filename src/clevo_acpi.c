@@ -85,6 +85,60 @@ static u32 clevo_acpi_evaluate(struct acpi_device *device, u8 cmd, u32 arg, u32 
 	return status;
 }
 
+static u32 clevo_acpi_evaluate_buffer(struct acpi_device *device, u8 cmd, u8 *buf, u32 buf_length, u32 *result)
+{
+	u32 status;
+	acpi_handle handle;
+	u64 dsm_rev_dummy = 0x00; // Dummy 0 value since not used
+	u64 dsm_func = cmd;
+	// Integer package data for argument
+	union acpi_object dsm_argv4_package_data[] = {
+		{
+			.buffer.type = ACPI_TYPE_BUFFER,
+			.buffer.length = buf_length,
+      .buffer.pointer = buf
+		}
+	};
+
+	// Package argument
+	union acpi_object dsm_argv4 = {
+		.package.type = ACPI_TYPE_PACKAGE,
+		.package.count = 1,
+		.package.elements = dsm_argv4_package_data
+	};
+
+	union acpi_object *out_obj;
+
+	guid_t clevo_acpi_dsm_uuid;
+
+	status = guid_parse(CLEVO_ACPI_DSM_UUID, &clevo_acpi_dsm_uuid);
+	if (status < 0)
+		return -ENOENT;
+
+	handle = acpi_device_handle(device);
+	if (handle == NULL)
+		return -ENODEV;
+
+	out_obj = acpi_evaluate_dsm(handle, &clevo_acpi_dsm_uuid, dsm_rev_dummy, dsm_func, &dsm_argv4);
+	if (!out_obj) {
+		pr_err("failed to evaluate _DSM\n");
+		status = -1;
+	} else {
+		if (out_obj->type == ACPI_TYPE_INTEGER) {
+			if (!IS_ERR_OR_NULL(result))
+				*result = (u32) out_obj->integer.value;
+				// pr_debug("evaluate _DSM cmd: %0#4x arg: %0#10x\n", cmd, arg);
+		} else {
+			pr_err("unknown output from _DSM\n");
+			status = -ENODATA;
+		}
+	}
+
+	ACPI_FREE(out_obj);
+
+	return status;
+}
+
 u32 clevo_acpi_interface_method_call(u8 cmd, u32 arg, u32 *result_value)
 {
 	u32 status = 0;
@@ -101,9 +155,26 @@ u32 clevo_acpi_interface_method_call(u8 cmd, u32 arg, u32 *result_value)
 	return status;
 }
 
+u32 clevo_acpi_interface_buffer_method_call(u8 cmd, u8 *buf, u32 buf_length, u32 *result_value)
+{
+	u32 status = 0;
+
+	if (!IS_ERR_OR_NULL(active_driver_data)) {
+		status = clevo_acpi_evaluate_buffer(active_driver_data->adev, cmd, buf, buf_length, result_value);
+	} else {
+		pr_err("acpi method call exec, no driver data found\n");
+		pr_err("..for method_call: %0#4x buffer arg", cmd);
+		status = -ENODATA;
+	}
+	// pr_debug("clevo_acpi method_call: %0#4x arg: %0#10x result: %0#10x\n", cmd, arg, !IS_ERR_OR_NULL(result_value) ? *result_value : 0);
+
+	return status;
+}
+
 struct clevo_interface_t clevo_acpi_interface = {
 	.string_id = CLEVO_INTERFACE_ACPI_STRID,
 	.method_call = clevo_acpi_interface_method_call,
+  .buffer_method_call = clevo_acpi_interface_buffer_method_call
 };
 
 static int clevo_acpi_add(struct acpi_device *device)
