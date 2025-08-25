@@ -102,7 +102,9 @@ u32 clevo_acpi_interface_method_call(u8 cmd, u32 arg, u32 *result_value)
 		union acpi_object *result_obj = NULL;
 		status = clevo_acpi_evaluate(active_driver_data->adev, cmd, acpi_arg, &result_obj);
 		if (!IS_ERR_OR_NULL(result_obj) && result_obj->type == ACPI_TYPE_INTEGER) {
-			*result_value = result_obj->integer.value;
+			if (!IS_ERR_OR_NULL(result_value)) {
+				*result_value = result_obj->integer.value;
+			}
 		} else {
 			pr_err("acpi method call exec, call returned unexpected data\n");
 			pr_err("(wanted integer, found null or non-integer)\n");

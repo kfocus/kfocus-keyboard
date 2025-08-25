@@ -1,3 +1,10 @@
+kfocus-keyboard (3.1.4-0kfocus7~beta1) noble; urgency=medium
+
+  * Port to Kbuild to fix kernel 6.14 build failure
+  * Add ZoneKB support
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Mon, 09 Jun 2025 12:27:30 -0500
+
 kfocus-keyboard (3.1.4-0kfocus6) noble; urgency=medium
 
   * Fix DKMS upgrade failure when upgrading kfocus-keyboard and the kernel at

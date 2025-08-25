@@ -9,6 +9,7 @@ override_dh_install:
 	mv src_pkg/dkms_postinst src_pkg/postinst
 	dh_install src usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
 	dh_install Makefile usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
+	dh_install Kbuild usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
 	dh_install dkms.conf usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
 	mv src_pkg/postinst src_pkg/dkms_postinst
 
