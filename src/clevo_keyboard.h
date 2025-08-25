@@ -348,6 +348,10 @@ u32 clevo_evaluate_method_buffer(u8 cmd, u8* buf, u32 buf_length)
 		pr_err("clevo_keyboard: no active interface while attempting cmd %02x with buffer arg\n", cmd);
 		return -ENODEV;
 	}
+	if (IS_ERR_OR_NULL(active_clevo_interface->buffer_method_call)) {
+		pr_err("clevo_keyboard: active interface does not support buffer_method_call\n");
+		return -ENODEV;
+	}
 	return active_clevo_interface->buffer_method_call(cmd, buf, buf_length);
 }
 EXPORT_SYMBOL(clevo_evaluate_method_buffer);
