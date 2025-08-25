@@ -19,6 +19,7 @@
 
 #include <linux/version.h>
 #include <linux/string.h>
+#include <linux/dmi.h>
 
 #include "tuxedo_keyboard_common.h"
 #include "clevo_interfaces.h"
@@ -174,6 +175,7 @@ static struct key_entry clevo_keymap[] = {
 // Keyboard struct
 struct kbd_led_state_t {
 	u8 has_extra;
+	u8 has_zonekb;
 	u8 enabled;
 
 	struct {
@@ -219,8 +221,6 @@ static uint param_color_extra = KB_COLOR_DEFAULT;
 module_param_named(color_extra, param_color_extra, uint, S_IRUSR);
 MODULE_PARM_DESC(color_extra, "Color for the Extra Region");
 
-// TODO: This is currently unused, it requires ZoneKB API checking before it
-// can be used.
 static uint param_color_numpad = KB_COLOR_DEFAULT;
 module_param_named(color_numpad, param_color_numpad, uint, S_IRUSR);
 MODULE_PARM_DESC(color_numpad, "Color for the Numpad Region");
@@ -236,6 +236,7 @@ MODULE_PARM_DESC(state,
 
 static struct kbd_led_state_t kbd_led_state = {
 	.has_extra = 0,
+	.has_zonekb = 0,
 	.enabled = 1,
 	.color = {
 	        .left = KB_COLOR_DEFAULT, .center = KB_COLOR_DEFAULT,
@@ -341,13 +342,13 @@ u32 clevo_evaluate_method(u8 cmd, u32 arg, u32 *result)
 }
 EXPORT_SYMBOL(clevo_evaluate_method);
 
-u32 clevo_evaluate_method_buffer(u8 cmd, u8* buf, u32 buf_length, u32 *result)
+u32 clevo_evaluate_method_buffer(u8 cmd, u8* buf, u32 buf_length)
 {
 	if (IS_ERR_OR_NULL(active_clevo_interface)) {
 		pr_err("clevo_keyboard: no active interface while attempting cmd %02x with buffer arg\n", cmd);
 		return -ENODEV;
 	}
-	return active_clevo_interface->buffer_method_call(cmd, buf, buf_length, result);
+	return active_clevo_interface->buffer_method_call(cmd, buf, buf_length);
 }
 EXPORT_SYMBOL(clevo_evaluate_method_buffer);
 
@@ -561,7 +562,7 @@ static int set_zonekb_color_base(u32 left_color, u32 center_color,
 		left_color, center_color, right_color, numpad_color,
 		lightbar_color, brightness);
 
-	return clevo_evaluate_method_buffer(CLEVO_METHOD_ID_SET_ZONEKB_LEDS, cmd_buf, sizeof(cmd_buf), NULL);
+	return clevo_evaluate_method_buffer(CLEVO_METHOD_ID_SET_ZONEKB_LEDS, cmd_buf, sizeof(cmd_buf));
 }
 
 static int set_zonekb_color(u32 left_color, u32 center_color, u32 right_color,
@@ -594,26 +595,18 @@ static int set_zonekb_color_string(const char *color_string, size_t size)
 	size_t i = 0;
 	char *color_string_copy = NULL;
 	char *color_string_sep;
-	bool copy_good = false;
 	int err = 0;
 
 	if (size > 200) {
 		return -EINVAL;
 	}
 
-	color_string_copy = kzalloc(size, GFP_KERNEL);
+	color_string_copy = kzalloc(size + 1, GFP_KERNEL);
+	if (!color_string_copy)
+		return -ENOMEM;
 	strncpy(color_string_copy, color_string, size);
+	color_string_copy[size] = '\0';
 	color_string_sep = color_string_copy;
-	for (i = 0; i < size; i++) {
-		if (color_string_copy[i] == '\0') {
-			copy_good = true;
-			break;
-		}
-	}
-	if (copy_good == false) {
-		kfree(color_string_copy);
-		return -EINVAL;
-	}
 
 	/*
 	 * Limit to 100 loops, there's no way we'll ever get a valid string with
@@ -750,11 +743,16 @@ static int set_next_color_whole_kb(void)
 	TUXEDO_INFO("set_next_color_whole_kb(): new_color_id: %i, new_color_code %X",
 		    new_color_id, new_color_code);
 
-	/* Set color on all four regions*/
-	set_color_code_region(REGION_LEFT,   new_color_code);
-	set_color_code_region(REGION_CENTER, new_color_code);
-	set_color_code_region(REGION_RIGHT,  new_color_code);
-	set_color_code_region(REGION_EXTRA,  new_color_code);
+	/* Set color on all regions */
+	if (kbd_led_state.has_zonekb) {
+		set_zonekb_color(new_color_code, new_color_code, new_color_code,
+			new_color_code, new_color_code, kbd_led_state.brightness);
+	} else {
+		set_color_code_region(REGION_LEFT,   new_color_code);
+		set_color_code_region(REGION_CENTER, new_color_code);
+		set_color_code_region(REGION_RIGHT,  new_color_code);
+		set_color_code_region(REGION_EXTRA,  new_color_code);
+	}
 
 	kbd_led_state.whole_kbd_color = new_color_id;
 
@@ -771,17 +769,21 @@ static void set_blinking_pattern(u8 blinkling_pattern)
 	}
 
 	if (blinkling_pattern == 0) {  // 0 is the "custom" blinking pattern
-
 		// so just set all regions to the stored colors
-		set_color(REGION_LEFT, kbd_led_state.color.left);
-		set_color(REGION_CENTER, kbd_led_state.color.center);
-		set_color(REGION_RIGHT, kbd_led_state.color.right);
+		if (kbd_led_state.has_zonekb) {
+			set_zonekb_color_base(kbd_led_state.color.left,
+				kbd_led_state.color.center, kbd_led_state.color.right,
+				kbd_led_state.color.numpad, kbd_led_state.color.extra,
+				kbd_led_state.brightness);
+		} else {
+			set_color(REGION_LEFT, kbd_led_state.color.left);
+			set_color(REGION_CENTER, kbd_led_state.color.center);
+			set_color(REGION_RIGHT, kbd_led_state.color.right);
 
-		if (kbd_led_state.has_extra == 1) {
-			set_color(REGION_EXTRA, kbd_led_state.color.extra);
+			if (kbd_led_state.has_extra == 1) {
+				set_color(REGION_EXTRA, kbd_led_state.color.extra);
+			}
 		}
-
-		// TODO: Add check and write for numpad region here
 	}
 }
 
@@ -895,6 +897,25 @@ static DEVICE_ATTR(zonekb, 0644, show_zonekb_fs, set_zonekb_fs);
 static DEVICE_ATTR(mode, 0644, show_blinking_patterns_fs, set_blinking_pattern_fs);
 static DEVICE_ATTR(extra, 0444, show_hasextra_fs, NULL);
 
+static bool check_zonekb_support(void)
+{
+	// There is probably not a good way of checking whether or not the ZoneKB
+	// API is available on a system via capability checking, so we're
+	// currently checking the system's model via a DMI check instead. This is
+	// non-ideal but will have to be acceptable for now.
+	const struct dmi_system_id zonekb_dmi_string_match[] = {
+		{
+			.matches = {
+				DMI_MATCH(DMI_PRODUCT_NAME, "X56xWNx"),
+			},
+		},
+	};
+	if (dmi_check_system(zonekb_dmi_string_match)) {
+		return true;
+	}
+	return false;
+}
+
 static void clevo_keyboard_init_device_interface(struct platform_device *dev)
 {
 	// Setup sysfs
@@ -932,7 +953,22 @@ static void clevo_keyboard_init_device_interface(struct platform_device *dev)
 			    ("Sysfs attribute file creation failed for color extra\n");
 		}
 
-		set_color(REGION_EXTRA, param_color_extra);
+		// TODO: Why. On earth. Is this here. This should not be here, we set
+		// the colors in clevo_keyboard_init(). Determine if removing this is
+		// safe or if it causes problems.
+		//set_color(REGION_EXTRA, param_color_extra);
+	}
+
+	if (check_zonekb_support()) {
+		kbd_led_state.has_zonekb = 1;
+		if (device_create_file
+		    (&dev->dev, &dev_attr_zonekb) != 0) {
+			TUXEDO_ERROR
+			    ("Sysfs attribute file creation failed for zonekb\n");
+		}
+	} else {
+		TUXEDO_DEBUG("System is not expected to have ZoneKB support");
+		kbd_led_state.has_zonekb = 0;
 	}
 
 	if (device_create_file(&dev->dev, &dev_attr_extra) !=
@@ -950,14 +986,6 @@ static void clevo_keyboard_init_device_interface(struct platform_device *dev)
 	    (&dev->dev, &dev_attr_brightness) != 0) {
 		TUXEDO_ERROR
 		    ("Sysfs attribute file creation failed for brightness\n");
-	}
-
-	// TODO: Do not expose this interface unless the hardware actually supports
-	// the ZoneKB API
-	if (device_create_file
-		(&dev->dev, &dev_attr_zonekb) != 0) {
-		TUXEDO_ERROR
-		    ("Sysfs attribute file creation failed for zonekb\n");
 	}
 }
 

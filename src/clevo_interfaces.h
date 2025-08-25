@@ -52,7 +52,7 @@ struct clevo_interface_t {
 	char *string_id;
 	void (*event_callb)(u32);
 	u32 (*method_call)(u8, u32, u32*);
- 	u32 (*buffer_method_call)(u8, u8*, u32, u32*);
+ 	u32 (*buffer_method_call)(u8, u8*, u32);
 };
 
 u32 clevo_keyboard_add_interface(struct clevo_interface_t *new_interface);
