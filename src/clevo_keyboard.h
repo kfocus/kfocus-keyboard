@@ -909,6 +909,7 @@ static bool check_zonekb_support(void)
 				DMI_MATCH(DMI_PRODUCT_NAME, "X56xWNx"),
 			},
 		},
+		{ },
 	};
 	if (dmi_check_system(zonekb_dmi_string_match)) {
 		return true;
