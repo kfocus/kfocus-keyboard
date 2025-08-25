@@ -36,6 +36,7 @@
 #define KEYBOARD_BRIGHTNESS             0xF4000000
 
 #define KB_COLOR_DEFAULT		0xFFFFFF // White
+#define KB_COLOR_INVALID		0xFFFFFFFF // Too large to represent any color
 #define DEFAULT_BLINKING_PATTERN        0
 
 // Submethod IDs for the CLEVO_GET interface method
@@ -221,7 +222,7 @@ static uint param_color_extra = KB_COLOR_DEFAULT;
 module_param_named(color_extra, param_color_extra, uint, S_IRUSR);
 MODULE_PARM_DESC(color_extra, "Color for the Extra Region");
 
-static uint param_color_numpad = KB_COLOR_DEFAULT;
+static uint param_color_numpad = KB_COLOR_INVALID;
 module_param_named(color_numpad, param_color_numpad, uint, S_IRUSR);
 MODULE_PARM_DESC(color_numpad, "Color for the Numpad Region");
 
@@ -1023,6 +1024,10 @@ static bool dmi_string_in(enum dmi_field f, const char *str)
 int clevo_keyboard_init(void)
 {
 	bool performance_profile_set_workaround;
+
+	// Fix uninitialized parameters
+	if (param_color_numpad == KB_COLOR_INVALID)
+		param_color_numpad = param_color_right;
 
 	// Init state from params
 	kbd_led_state.color.left = param_color_left;
