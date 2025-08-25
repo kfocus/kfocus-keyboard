@@ -101,17 +101,19 @@ u32 clevo_acpi_interface_method_call(u8 cmd, u32 arg, u32 *result_value)
 		};
 		union acpi_object *result_obj = NULL;
 		status = clevo_acpi_evaluate(active_driver_data->adev, cmd, acpi_arg, &result_obj);
-		if (!IS_ERR_OR_NULL(result_obj) && result_obj->type == ACPI_TYPE_INTEGER) {
-			if (!IS_ERR_OR_NULL(result_value)) {
-				*result_value = result_obj->integer.value;
+		if (!IS_ERR_OR_NULL(result_obj)) {
+			if (result_obj->type == ACPI_TYPE_INTEGER) {
+				if (!IS_ERR_OR_NULL(result_value)) {
+					*result_value = result_obj->integer.value;
+				}
+			} else {
+				pr_err("acpi method call exec, call returned non-integer\n");
+				status = -ENODATA;
 			}
-		} else {
-			pr_err("acpi method call exec, call returned unexpected data\n");
-			pr_err("(wanted integer, found null or non-integer)\n");
-			status = -ENODATA;
-		}
-		if (result_obj != NULL) {
 			ACPI_FREE(result_obj);
+		} else {
+			pr_err("acpi method call exec, call returned null or error\n");
+			status = -ENODATA;
 		}
 	} else {
 		pr_err("acpi method call exec, no driver data found\n");
@@ -134,13 +136,15 @@ u32 clevo_acpi_interface_buffer_method_call(u8 cmd, u8 *buf, u32 buf_length)
 		};
 		union acpi_object *result_obj = NULL;
 		status = clevo_acpi_evaluate(active_driver_data->adev, cmd, arg, &result_obj);
-		if (IS_ERR_OR_NULL(result_obj) || result_obj->type != ACPI_TYPE_BUFFER) {
-			pr_err("acpi method call exec, call returned unexpected data\n");
-			pr_err("(wanted buffer, found null or non-buffer)\n");
-			status = -ENODATA;
-		}
-		if (result_obj != NULL) {
+		if (!IS_ERR_OR_NULL(result_obj)) {
+			if (result_obj->type != ACPI_TYPE_BUFFER) {
+				pr_err("acpi method call exec, call returned non-array\n");
+				status = -ENODATA;
+			}
 			ACPI_FREE(result_obj);
+		} else {
+			pr_err("acpi method call exec, call returned null or error\n");
+			status = -ENODATA;
 		}
 	} else {
 		pr_err("acpi method call exec, no driver data found\n");
@@ -204,11 +208,11 @@ void clevo_acpi_notify(struct acpi_device *device, u32 event)
 		.integer.value = 0
 	};
 	clevo_acpi_evaluate(device, 0x01, arg, &event_value);
-	if (!IS_ERR_OR_NULL(event_value) && event_value->type == ACPI_TYPE_INTEGER) {
-		u32 event_value_int = (u32)(event_value->integer.value);
-		pr_debug("clevo_acpi event: %0#6x, clevo event value: %0#6x\n", event, event_value_int);
-	}
-	if (event_value != NULL) {
+	if (!IS_ERR_OR_NULL(event_value)) {
+		if (event_value->type == ACPI_TYPE_INTEGER) {
+			u32 event_value_int = (u32)(event_value->integer.value);
+			pr_debug("clevo_acpi event: %0#6x, clevo event value: %0#6x\n", event, event_value_int);
+		}
 		ACPI_FREE(event_value);
 	}
 
