@@ -40,11 +40,12 @@
 #define DEFAULT_BLINKING_PATTERN        0
 
 // Submethod IDs for the CLEVO_GET interface method
+// All of these are magic IDs from the ACPI tables.
 #define CLEVO_METHOD_ID_GET_EVENT	0x01
 #define CLEVO_METHOD_ID_GET_AP		0x46
 #define CLEVO_METHOD_ID_SET_KB_LEDS	0x67 /* used to set color, brightness,
 	                                        blinking pattern, etc. */
-#define CLEVO_METHOD_ID_SET_ZONEKB_LEDS 0x04
+#define CLEVO_METHOD_ID_SET_ZONEKB_LEDS 0x04 // Only on certain machines (m2g6)
 
 
 // Clevo event codes
@@ -74,6 +75,32 @@ void clevo_keyboard_write_state(void);
 void clevo_keyboard_event_callb(u32 event);
 
 static DEFINE_MUTEX(clevo_keyboard_interface_modification_lock);
+
+/*
+ * There is probably not a good way of checking whether or not the ZoneKB
+ * API is available on a system via capability checking, so we're
+ * currently checking the system's model via a DMI check instead. This struct
+ * holds the database of DMI strings we match against.
+ */
+static const struct dmi_system_id zonekb_dmi_string_match[] = {
+	{
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_NAME, "X56xWNx"),
+		},
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_BIOS_VERSION, "1.07.07S3min29"),
+		},
+	},
+	// Add more matches here
+
+	/*
+	 * DO NOT REMOVE this empty element,
+	 * it signals the end of the array.
+	 */
+	{ },
+};
 
 u32 clevo_keyboard_add_interface(struct clevo_interface_t *new_interface)
 {
@@ -236,17 +263,17 @@ MODULE_PARM_DESC(state,
 		 "Set the State of the Keyboard TRUE = ON | FALSE = OFF");
 
 static struct kbd_led_state_t kbd_led_state = {
-	.has_extra = 0,
+	.has_extra  = 0,
 	.has_zonekb = 0,
-	.enabled = 1,
-	.color = {
-	        .left = KB_COLOR_DEFAULT, .center = KB_COLOR_DEFAULT,
-	        .right = KB_COLOR_DEFAULT, .numpad = KB_COLOR_DEFAULT,
-	        .extra = KB_COLOR_DEFAULT
-	         },
-	.brightness = BRIGHTNESS_DEFAULT,
+	.enabled    = 1,
+	.color      = {
+		.left  = KB_COLOR_DEFAULT, .center = KB_COLOR_DEFAULT,
+		.right = KB_COLOR_DEFAULT, .numpad = KB_COLOR_DEFAULT,
+		.extra = KB_COLOR_DEFAULT
+	},
+	.brightness       = BRIGHTNESS_DEFAULT,
 	.blinking_pattern = DEFAULT_BLINKING_PATTERN,
-	.whole_kbd_color = 7
+	.whole_kbd_color  = 7
 };
 
 static struct blinking_pattern_t blinking_patterns[] = {
@@ -321,6 +348,10 @@ static ssize_t show_hasextra_fs(struct device *child,
 static ssize_t show_zonekb_fs(struct device *child,
 	struct device_attribute *attr, char *buffer)
 {
+	/*
+	 * 'buffer' is exactly 1 page (4096 bytes) long on x86_64 systems,
+	 * per the kernel API.
+	 */
 	return sprintf(
 		buffer,
 		"LEFT_COLOR=%06x\nCENTER_COLOR=%06x\nRIGHT_COLOR=%06x\nNUMPAD_COLOR=%06x\nLIGHTBAR_COLOR=%06x\nKB_BRIGHTNESS=%d\n",
@@ -350,7 +381,11 @@ u32 clevo_evaluate_method_buffer(u8 cmd, u8* buf, u32 buf_length)
 		return -ENODEV;
 	}
 	if (IS_ERR_OR_NULL(active_clevo_interface->buffer_method_call)) {
-		pr_err("clevo_keyboard: active interface does not support buffer_method_call\n");
+		/*
+		 * This condition is normally transient and is hit on every boot, so
+		 * the error message isn't helpful.
+		 */
+		//pr_err("clevo_keyboard: active interface does not support buffer_method_call while attempting cmd %02x with buffer arg\n", cmd);
 		return -ENODEV;
 	}
 	return active_clevo_interface->buffer_method_call(cmd, buf, buf_length);
@@ -511,6 +546,11 @@ static int set_color_string_region(const char *color_string, size_t size, u32 re
 	return size;
 }
 
+/*
+ * Updates the EC to match the colors defined in the provided arguments.
+ * Colors updated with this function CANNOT be read back from the 'zonekb'
+ * file, the caller is expected to update kbd_led_state itself if desired.
+ */
 static int set_zonekb_color_base(u32 left_color, u32 center_color,
 	u32 right_color, u32 numpad_color, u32 lightbar_color, u8 brightness)
 {
@@ -524,7 +564,9 @@ static int set_zonekb_color_base(u32 left_color, u32 center_color,
 	 * regions and the lightbar:
 	 *
 	 * [
-	 *   0x2C, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	 *   0x2C, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	 *   0x00, 0x00, 0x00, 0x00, 0x00,
+	 *
 	 *   KB_BRIGHTNESS,
 	 *   LEFT_RED, LEFT_GREEN, LEFT_BLUE,
 	 *   CENTER_RED, CENTER_GREEN, CENTER_BLUE,
@@ -532,6 +574,7 @@ static int set_zonekb_color_base(u32 left_color, u32 center_color,
 	 *   NUMPAD_RED, NUMPAD_GREEN, NUMPAD_BLUE,
 	 *   LIGHTBAR_RED, LIGHTBAR_GREEN, LIGHTBAR_BLUE,
 	 *   LIGHTBAR_BRIGHTNESS,
+	 *
 	 *   { 223 0x00s }
 	 * ]
 	 */
@@ -570,37 +613,58 @@ static int set_zonekb_color_base(u32 left_color, u32 center_color,
 	return clevo_evaluate_method_buffer(CLEVO_METHOD_ID_SET_ZONEKB_LEDS, cmd_buf, sizeof(cmd_buf));
 }
 
+/*
+ * Sets the kbd_led_state colors to those defined in the arguments, and
+ * updates the EC to match those colors. Colors updated with this function can
+ * be read from the 'zonekb' file.
+ */
 static int set_zonekb_color(u32 left_color, u32 center_color, u32 right_color,
 	u32 numpad_color, u32 lightbar_color, u8 brightness)
 {
 	int err;
 	if (0 == (err = set_zonekb_color_base(left_color, center_color,
 		right_color, numpad_color, lightbar_color, brightness))) {
-		kbd_led_state.color.left = left_color;
+		kbd_led_state.color.left   = left_color;
 		kbd_led_state.color.center = center_color;
-		kbd_led_state.color.right = right_color;
+		kbd_led_state.color.right  = right_color;
 		kbd_led_state.color.numpad = numpad_color;
-		kbd_led_state.color.extra = lightbar_color;
-		kbd_led_state.brightness = brightness;
+		kbd_led_state.color.extra  = lightbar_color;
+		kbd_led_state.brightness   = brightness;
 	}
-
 	return err;
 }
 
+/*
+ * Sets the kbd_led_state colors to those defined in color_string, and updates
+ * the EC to match those colors. The string is expected to match the following
+ * format:
+ *
+ * LEFT_COLOR=0xRRGGBB
+ * CENTER_COLOR=0xRRGGBB
+ * RIGHT_COLOR=0xRRGGBB
+ * NUMPAD_COLOR=0xRRGGBB
+ * LIGHTBAR_COLOR=0xRRGGBB
+ * KB_BRIGHTNESS=0-255
+ *
+ * Lines may be in arbitrary order, and all lines are optional. Missing
+ * values will default to current. Colors updated with this function can be
+ * read back from the 'zonekb' file.
+ */
 static int set_zonekb_color_string(const char *color_string, size_t size)
 {
-	u32 left_color = kbd_led_state.color.left;
-	u32 center_color = kbd_led_state.color.center;
-	u32 right_color = kbd_led_state.color.right;
-	u32 numpad_color = kbd_led_state.color.numpad;
+	u32 left_color     = kbd_led_state.color.left;
+	u32 center_color   = kbd_led_state.color.center;
+	u32 right_color    = kbd_led_state.color.right;
+	u32 numpad_color   = kbd_led_state.color.numpad;
 	u32 lightbar_color = kbd_led_state.color.extra;
-	u8 brightness = kbd_led_state.brightness;
+	u8 brightness      = kbd_led_state.brightness;
+
 	u32 colorcode = 0;
-	u8 target_val = 0;
-	size_t i = 0;
+	size_t i      = 0;
+	int err       = 0;
+
 	char *color_string_copy = NULL;
-	char *color_string_sep;
-	int err = 0;
+	char *color_string_sep  = NULL;
 
 	if (size > 200) {
 		return -EINVAL;
@@ -614,10 +678,10 @@ static int set_zonekb_color_string(const char *color_string, size_t size)
 	color_string_sep = color_string_copy;
 
 	/*
-	 * Limit to 100 loops, there's no way we'll ever get a valid string with
-	 * more lines than that
+	 * Parse lines in string. Limit to max of 20 lines. As of 2025-08-26,
+	 * the largest expected string is 6 lines.
 	 */
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < 20; i++) {
 		char *color_string_line = strsep(&color_string_sep, "\n");
 		ssize_t eq_idx = -1;
 
@@ -628,33 +692,12 @@ static int set_zonekb_color_string(const char *color_string, size_t size)
 			continue;
 		}
 
-		if (strncmp("LEFT_COLOR=", color_string_line,
-			strlen("LEFT_COLOR=")) == 0) {
-			target_val = 0; // left
-		} else if (strncmp("CENTER_COLOR=", color_string_line,
-			strlen("CENTER_COLOR=")) == 0) {
-			target_val = 1; // center
-		} else if (strncmp("RIGHT_COLOR=", color_string_line,
-			strlen("RIGHT_COLOR=")) == 0) {
-			target_val = 2; // right
-		} else if (strncmp("NUMPAD_COLOR=", color_string_line,
-			strlen("NUMPAD_COLOR=")) == 0) {
-			target_val = 3; // numpad
-		} else if (strncmp("LIGHTBAR_COLOR=", color_string_line,
-			strlen("LIGHTBAR_COLOR=")) == 0) {
-			target_val = 4; // lightbar
-		} else if (strncmp("KB_BRIGHTNESS=", color_string_line,
-			strlen("KB_BRIGHTNESS=")) == 0) {
-			target_val = 5; // brightness
-		} else {
-			kfree(color_string_copy);
-			return -EINVAL;
-		}
-
 		eq_idx = (ssize_t)(strchr(color_string_line, '=') - color_string_line);
+		/*
+		 * This should never happen since we check for an =
+		 * sign above, but just in case...
+		 */
 		if (eq_idx < 0) {
-			// This should never happen since we check for an =
-			// sign above, but just in case...
 			kfree(color_string_copy);
 			return -EINVAL;
 		}
@@ -664,29 +707,31 @@ static int set_zonekb_color_string(const char *color_string, size_t size)
 			return err;
 		}
 
-		switch (target_val) {
-		case 0:
+		if (strncmp("LEFT_COLOR=", color_string_line,
+			strlen("LEFT_COLOR=")) == 0) {
 			left_color = colorcode;
-			break;
-		case 1:
+		} else if (strncmp("CENTER_COLOR=", color_string_line,
+			strlen("CENTER_COLOR=")) == 0) {
 			center_color = colorcode;
-			break;
-		case 2:
+		} else if (strncmp("RIGHT_COLOR=", color_string_line,
+			strlen("RIGHT_COLOR=")) == 0) {
 			right_color = colorcode;
-			break;
-		case 3:
+		} else if (strncmp("NUMPAD_COLOR=", color_string_line,
+			strlen("NUMPAD_COLOR=")) == 0) {
 			numpad_color = colorcode;
-			break;
-		case 4:
+		} else if (strncmp("LIGHTBAR_COLOR=", color_string_line,
+			strlen("LIGHTBAR_COLOR=")) == 0) {
 			lightbar_color = colorcode;
-			break;
-		case 5:
+		} else if (strncmp("KB_BRIGHTNESS=", color_string_line,
+			strlen("KB_BRIGHTNESS=")) == 0) {
 			if (colorcode > 255) {
 				kfree(color_string_copy);
 				return -EINVAL;
 			}
 			brightness = colorcode;
-			break;
+		} else {
+			kfree(color_string_copy);
+			return -EINVAL;
 		}
 	}
 
@@ -750,6 +795,7 @@ static int set_next_color_whole_kb(void)
 
 	/* Set color on all regions */
 	if (kbd_led_state.has_zonekb) {
+		// Updates kbd_led_state to the new color and applies to EC
 		set_zonekb_color(new_color_code, new_color_code, new_color_code,
 			new_color_code, new_color_code, kbd_led_state.brightness);
 	} else {
@@ -776,6 +822,7 @@ static void set_blinking_pattern(u8 blinkling_pattern)
 	if (blinkling_pattern == 0) {  // 0 is the "custom" blinking pattern
 		// so just set all regions to the stored colors
 		if (kbd_led_state.has_zonekb) {
+			// Restores existing color from kbd_led_state to EC only
 			set_zonekb_color_base(kbd_led_state.color.left,
 				kbd_led_state.color.center, kbd_led_state.color.right,
 				kbd_led_state.color.numpad, kbd_led_state.color.extra,
@@ -904,18 +951,6 @@ static DEVICE_ATTR(extra, 0444, show_hasextra_fs, NULL);
 
 static bool check_zonekb_support(void)
 {
-	// There is probably not a good way of checking whether or not the ZoneKB
-	// API is available on a system via capability checking, so we're
-	// currently checking the system's model via a DMI check instead. This is
-	// non-ideal but will have to be acceptable for now.
-	const struct dmi_system_id zonekb_dmi_string_match[] = {
-		{
-			.matches = {
-				DMI_MATCH(DMI_PRODUCT_NAME, "X56xWNx"),
-			},
-		},
-		{ },
-	};
 	if (dmi_check_system(zonekb_dmi_string_match)) {
 		return true;
 	}
@@ -959,10 +994,7 @@ static void clevo_keyboard_init_device_interface(struct platform_device *dev)
 			    ("Sysfs attribute file creation failed for color extra\n");
 		}
 
-		// TODO: Why. On earth. Is this here. This should not be here, we set
-		// the colors in clevo_keyboard_init(). Determine if removing this is
-		// safe or if it causes problems.
-		//set_color(REGION_EXTRA, param_color_extra);
+		set_color(REGION_EXTRA, param_color_extra);
 	}
 
 	if (check_zonekb_support()) {

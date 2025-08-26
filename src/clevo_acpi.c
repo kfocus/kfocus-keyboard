@@ -140,7 +140,7 @@ u32 clevo_acpi_interface_buffer_method_call(u8 cmd, u8 *buf, u32 buf_length)
 			if (result_obj->type != ACPI_TYPE_BUFFER) {
 				pr_err("acpi method call exec, call returned non-array\n");
 				status = -ENODATA;
-			}
+			} // else, gauntlet is passed and status = 0
 			ACPI_FREE(result_obj);
 		} else {
 			pr_err("acpi method call exec, call returned null or error\n");
