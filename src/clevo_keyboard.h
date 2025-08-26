@@ -218,7 +218,7 @@ static uint param_color_right = KB_COLOR_DEFAULT;
 module_param_named(color_right, param_color_right, uint, S_IRUSR);
 MODULE_PARM_DESC(color_right, "Color for the Right Region");
 
-static uint param_color_extra = KB_COLOR_DEFAULT;
+static uint param_color_extra = KB_COLOR_INVALID;
 module_param_named(color_extra, param_color_extra, uint, S_IRUSR);
 MODULE_PARM_DESC(color_extra, "Color for the Extra Region");
 
@@ -1026,6 +1026,8 @@ int clevo_keyboard_init(void)
 	bool performance_profile_set_workaround;
 
 	// Fix uninitialized parameters
+	if (param_color_extra == KB_COLOR_INVALID)
+		param_color_extra = param_color_center;
 	if (param_color_numpad == KB_COLOR_INVALID)
 		param_color_numpad = param_color_right;
 
