@@ -1,3 +1,9 @@
+kfocus-keyboard (3.1.4-0kfocus7~beta3) noble; urgency=medium
+
+  * Fix BIOS version check
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Thu, 28 Aug 2025 14:37:44 -0500
+
 kfocus-keyboard (3.1.4-0kfocus7~beta2) noble; urgency=medium
 
   * Port to Kbuild to fix kernel 6.14 build failure (#5486)
