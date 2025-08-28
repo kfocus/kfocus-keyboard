@@ -76,32 +76,6 @@ void clevo_keyboard_event_callb(u32 event);
 
 static DEFINE_MUTEX(clevo_keyboard_interface_modification_lock);
 
-/*
- * There is probably not a good way of checking whether or not the ZoneKB
- * API is available on a system via capability checking, so we're
- * currently checking the system's model via a DMI check instead. This struct
- * holds the database of DMI strings we match against.
- */
-static const struct dmi_system_id zonekb_dmi_string_match[] = {
-	{
-		.matches = {
-			DMI_MATCH(DMI_PRODUCT_NAME, "X56xWNx"),
-		},
-	},
-	{
-		.matches = {
-			DMI_MATCH(DMI_BIOS_VERSION, "1.07.07S3min29"),
-		},
-	},
-	// Add more matches here
-
-	/*
-	 * DO NOT REMOVE this empty element,
-	 * it signals the end of the array.
-	 */
-	{ },
-};
-
 u32 clevo_keyboard_add_interface(struct clevo_interface_t *new_interface)
 {
 	mutex_lock(&clevo_keyboard_interface_modification_lock);
@@ -951,9 +925,16 @@ static DEVICE_ATTR(extra, 0444, show_hasextra_fs, NULL);
 
 static bool check_zonekb_support(void)
 {
-	if (dmi_check_system(zonekb_dmi_string_match)) {
+	/*
+	 * There is probably not a good way of checking whether or not the ZoneKB
+	 * API is available on a system via capability checking, so we're
+	 * currently checking the system's model via a DMI check instead.
+	 */
+	if (dmi_match(DMI_PRODUCT_NAME, "X56xWNx")
+		&& dmi_match(DMI_BIOS_VERSION, "1.07.07S3min29")) {
 		return true;
 	}
+
 	return false;
 }
 
