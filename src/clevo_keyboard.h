@@ -207,24 +207,25 @@ static const struct kernel_param_ops param_ops_mode_ops = {
 	.get = param_get_int,
 };
 
-static uint param_color_left = KB_COLOR_DEFAULT;
-module_param_named(color_left, param_color_left, uint, S_IRUSR);
-MODULE_PARM_DESC(color_left, "Color for the Left Region");
-
-static uint param_color_center = KB_COLOR_DEFAULT;
-module_param_named(color_center, param_color_center, uint, S_IRUSR);
-MODULE_PARM_DESC(color_center, "Color for the Center Region");
-
-static uint param_color_right = KB_COLOR_DEFAULT;
-module_param_named(color_right, param_color_right, uint, S_IRUSR);
-MODULE_PARM_DESC(color_right, "Color for the Right Region");
-
+static uint param_color_left = KB_COLOR_INVALID;
+static uint param_color_center = KB_COLOR_INVALID;
+static uint param_color_right = KB_COLOR_INVALID;
 static uint param_color_extra = KB_COLOR_INVALID;
-module_param_named(color_extra, param_color_extra, uint, S_IRUSR);
-MODULE_PARM_DESC(color_extra, "Color for the Extra Region");
-
 static uint param_color_numpad = KB_COLOR_INVALID;
-module_param_named(color_numpad, param_color_numpad, uint, S_IRUSR);
+static char *param_color_left_str = NULL;
+static char *param_color_center_str = NULL;
+static char *param_color_right_str = NULL;
+static char *param_color_extra_str = NULL;
+static char *param_color_numpad_str = NULL;
+module_param_named(color_left, param_color_left_str, charp, S_IRUSR);
+MODULE_PARM_DESC(color_left, "Color for the Left Region");
+module_param_named(color_center, param_color_center_str, charp, S_IRUSR);
+MODULE_PARM_DESC(color_center, "Color for the Center Region");
+module_param_named(color_right, param_color_right_str, charp, S_IRUSR);
+MODULE_PARM_DESC(color_right, "Color for the Right Region");
+module_param_named(color_extra, param_color_extra_str, charp, S_IRUSR);
+MODULE_PARM_DESC(color_extra, "Color for the Extra Region");
+module_param_named(color_numpad, param_color_numpad_str, charp, S_IRUSR);
 MODULE_PARM_DESC(color_numpad, "Color for the Numpad Region");
 
 static ushort param_blinking_pattern = DEFAULT_BLINKING_PATTERN;
@@ -1034,15 +1035,57 @@ static bool dmi_string_in(enum dmi_field f, const char *str)
 	return strstr(info, str) != NULL;
 }
 
+bool try_parse_color_str(char *color_str, uint *param) {
+	unsigned int color_val;
+	int err;
+
+	// NULL input string is not a failure, it just means we weren't given that
+	// parameter
+	if (color_str == NULL) {
+		return true;
+	}
+	err = kstrtouint(color_str, 0, &color_val);
+	if (err)
+		return false;
+	if (color_val > 0xFFFFFF)
+		return false;
+
+	*param = color_val;
+	return true;
+}
+
 int clevo_keyboard_init(void)
 {
 	bool performance_profile_set_workaround;
 
-	// Fix uninitialized parameters
-	if (param_color_extra == KB_COLOR_INVALID)
-		param_color_extra = param_color_center;
-	if (param_color_numpad == KB_COLOR_INVALID)
-		param_color_numpad = param_color_right;
+	// Parse kernel parameters, switch to default colors if something goes wrong
+	if (try_parse_color_str(param_color_left_str, &param_color_left)
+		&& try_parse_color_str(param_color_center_str, &param_color_center)
+		&& try_parse_color_str(param_color_right_str, &param_color_right)
+		&& try_parse_color_str(param_color_extra_str, &param_color_extra)
+		&& try_parse_color_str(param_color_numpad_str, &param_color_numpad)) {
+		// Fix missing parameters if needed
+		if (param_color_left == KB_COLOR_INVALID)
+			param_color_left = KB_COLOR_DEFAULT;
+
+		if (param_color_center == KB_COLOR_INVALID)
+			param_color_center = KB_COLOR_DEFAULT;
+
+		if (param_color_right == KB_COLOR_INVALID)
+			param_color_right = KB_COLOR_DEFAULT;
+
+		if (param_color_extra == KB_COLOR_INVALID)
+			param_color_extra = param_color_center;
+
+		if (param_color_numpad == KB_COLOR_INVALID)
+			param_color_numpad = param_color_right;
+	} else {
+		param_color_left = KB_COLOR_DEFAULT;
+		param_color_center = KB_COLOR_DEFAULT;
+		param_color_right = KB_COLOR_DEFAULT;
+		param_color_extra = KB_COLOR_DEFAULT;
+		param_color_numpad = KB_COLOR_DEFAULT;
+	}
 
 	// Init state from params
 	kbd_led_state.color.left = param_color_left;
