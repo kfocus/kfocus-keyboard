@@ -1,3 +1,9 @@
+kfocus-keyboard (3.1.4-0kfocus8~beta1) noble; urgency=medium
+
+  * Handle improper color values in module parameters more gracefully (#5800)
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Tue, 09 Sep 2025 16:56:56 -0500
+
 kfocus-keyboard (3.1.4-0kfocus7) noble; urgency=medium
 
   * Port to Kbuild to fix kernel 6.14 build failure (#5486)
