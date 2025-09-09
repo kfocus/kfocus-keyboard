@@ -1035,15 +1035,19 @@ static bool dmi_string_in(enum dmi_field f, const char *str)
 	return strstr(info, str) != NULL;
 }
 
+/**
+ * Parse the provided color string into a uint and place in param. Returns
+ * true if the parse succeeds, otherwise returns false. A NULL value for
+ * color_str is not considered a vailure; the param is unchanged in this
+ * scenario.
+ */
 bool try_parse_color_str(char *color_str, uint *param) {
 	unsigned int color_val;
 	int err;
 
-	// NULL input string is not a failure, it just means we weren't given that
-	// parameter
-	if (color_str == NULL) {
+	if (color_str == NULL)
 		return true;
-	}
+
 	err = kstrtouint(color_str, 0, &color_val);
 	if (err)
 		return false;
@@ -1064,26 +1068,24 @@ int clevo_keyboard_init(void)
 		&& try_parse_color_str(param_color_right_str, &param_color_right)
 		&& try_parse_color_str(param_color_extra_str, &param_color_extra)
 		&& try_parse_color_str(param_color_numpad_str, &param_color_numpad)) {
+
 		// Fix missing parameters if needed
 		if (param_color_left == KB_COLOR_INVALID)
 			param_color_left = KB_COLOR_DEFAULT;
-
 		if (param_color_center == KB_COLOR_INVALID)
 			param_color_center = KB_COLOR_DEFAULT;
-
 		if (param_color_right == KB_COLOR_INVALID)
 			param_color_right = KB_COLOR_DEFAULT;
 
 		if (param_color_extra == KB_COLOR_INVALID)
 			param_color_extra = param_color_center;
-
 		if (param_color_numpad == KB_COLOR_INVALID)
 			param_color_numpad = param_color_right;
 	} else {
-		param_color_left = KB_COLOR_DEFAULT;
+		param_color_left   = KB_COLOR_DEFAULT;
 		param_color_center = KB_COLOR_DEFAULT;
-		param_color_right = KB_COLOR_DEFAULT;
-		param_color_extra = KB_COLOR_DEFAULT;
+		param_color_right  = KB_COLOR_DEFAULT;
+		param_color_extra  = KB_COLOR_DEFAULT;
 		param_color_numpad = KB_COLOR_DEFAULT;
 	}
 
