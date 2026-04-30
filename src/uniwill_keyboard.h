@@ -101,6 +101,15 @@ static struct uniwill_interfaces_t {
 
 uniwill_event_callb_t uniwill_event_callb;
 
+int uniwill_timer_delete(struct timer_list *timer)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0)
+	return del_timer(timer);
+#else
+	return timer_delete(timer);
+#endif
+}
+
 u32 uniwill_read_ec_ram(u16 address, u8 *data)
 {
 	u32 status;
@@ -438,7 +447,7 @@ static ssize_t uw_color_string_store(struct device *child,
 {
 	u32 color_value;
 	char *buffer_copy;
-	
+
 	buffer_copy = kmalloc(size + 1, GFP_KERNEL);
 	strcpy(buffer_copy, buffer);
 	color_value = color_lookup(&color_list, strstrip(buffer_copy));
@@ -516,13 +525,13 @@ static void uw_kbd_bl_init_ready_check_work_func(struct work_struct *work)
 
 	if (prev_colors_same) {
 		uw_kbd_bl_init_set();
-		del_timer(&uw_kbd_bl_init_timer);
+		uniwill_timer_delete(&uw_kbd_bl_init_timer);
 	} else {
 		if (uw_kbd_bl_check_count != 0) {
 			mod_timer(&uw_kbd_bl_init_timer, jiffies + msecs_to_jiffies(uw_kbd_bl_init_check_interval_ms));
 		} else {
 			TUXEDO_INFO("uw kbd init timeout, failed to detect end of boot animation\n");
-			del_timer(&uw_kbd_bl_init_timer);
+			uniwill_timer_delete(&uw_kbd_bl_init_timer);
 		}
 	}
 
@@ -1306,7 +1315,7 @@ static void uniwill_keyboard_remove(struct platform_device *dev)
 
 	unregister_keyboard_notifier(&keyboard_notifier_block);
 
-	del_timer(&uw_kbd_bl_init_timer);
+	uniwill_timer_delete(&uw_kbd_bl_init_timer);
 
 	if (uw_lightbar_loaded)
 		uw_lightbar_remove(dev);
