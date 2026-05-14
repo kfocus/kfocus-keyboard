@@ -1,21 +1,26 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*!
- * Copyright (c) 2020-2021 TUXEDO Computers GmbH <tux@tuxedocomputers.com>
+ * Copyright (c) 2020-2024 TUXEDO Computers GmbH <tux@tuxedocomputers.com>
  *
- * This file is part of tuxedo-keyboard.
+ * This file is part of tuxedo-drivers.
  *
- * tuxedo-keyboard is free software: you can redistribute it and/or modify
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * This software is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this software.  If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see <https://www.gnu.org/licenses/>.
  */
+
+#ifndef UNIWILL_KEYBOARD_H
+#define UNIWILL_KEYBOARD_H
+
 #include "tuxedo_keyboard_common.h"
 #include <linux/acpi.h>
 #include <linux/wmi.h>
@@ -24,58 +29,55 @@
 #include <linux/timer.h>
 #include <linux/delay.h>
 #include <linux/leds.h>
+#include <linux/led-class-multicolor.h>
 #include <linux/string.h>
 #include <linux/version.h>
+#include <linux/efi.h>
+#include <linux/slab.h>
+#include <linux/i8042.h>
+#include <linux/serio.h>
+#include <acpi/battery.h>
 #include "uniwill_interfaces.h"
+#include "uniwill_leds.h"
 
-#define UNIWILL_WMI_MGMT_GUID_BA "ABBC0F6D-8EA1-11D1-00A0-C90629100000"
-#define UNIWILL_WMI_MGMT_GUID_BB "ABBC0F6E-8EA1-11D1-00A0-C90629100000"
-#define UNIWILL_WMI_MGMT_GUID_BC "ABBC0F6F-8EA1-11D1-00A0-C90629100000"
+#define FAN_ON_MIN_SPEED_PERCENT 25
 
-#define UNIWILL_WMI_EVENT_GUID_0 "ABBC0F70-8EA1-11D1-00A0-C90629100000"
-#define UNIWILL_WMI_EVENT_GUID_1 "ABBC0F71-8EA1-11D1-00A0-C90629100000"
-#define UNIWILL_WMI_EVENT_GUID_2 "ABBC0F72-8EA1-11D1-00A0-C90629100000"
+#define UNIWILL_OSD_RADIOON				0x01A
+#define UNIWILL_OSD_RADIOOFF				0x01B
+#define UNIWILL_OSD_KB_LED_LEVEL0			0x03B
+#define UNIWILL_OSD_KB_LED_LEVEL1			0x03C
+#define UNIWILL_OSD_KB_LED_LEVEL2			0x03D
+#define UNIWILL_OSD_KB_LED_LEVEL3			0x03E
+#define UNIWILL_OSD_KB_LED_LEVEL4			0x03F
+#define UNIWILL_OSD_DC_ADAPTER_CHANGE			0x0AB
+#define UNIWILL_OSD_MODE_CHANGE_KEY_EVENT		0x0B0
 
-#define UNIWILL_OSD_RADIOON			0x01A
-#define UNIWILL_OSD_RADIOOFF			0x01B
-#define UNIWILL_OSD_KB_LED_LEVEL0		0x03B
-#define UNIWILL_OSD_KB_LED_LEVEL1		0x03C
-#define UNIWILL_OSD_KB_LED_LEVEL2		0x03D
-#define UNIWILL_OSD_KB_LED_LEVEL3		0x03E
-#define UNIWILL_OSD_KB_LED_LEVEL4		0x03F
-#define UNIWILL_OSD_DC_ADAPTER_CHANGE		0x0AB
+#define UNIWILL_KEY_RFKILL				0x0A4
+#define UNIWILL_KEY_KBDILLUMDOWN			0x0B1
+#define UNIWILL_KEY_KBDILLUMUP				0x0B2
+#define UNIWILL_KEY_FN_LOCK				0x0B8
+#define UNIWILL_KEY_KBDILLUMTOGGLE			0x0B9
 
-#define UNIWILL_KEY_RFKILL			0x0A4
-#define UNIWILL_KEY_KBDILLUMDOWN		0x0B1
-#define UNIWILL_KEY_KBDILLUMUP			0x0B2
-#define UNIWILL_KEY_KBDILLUMTOGGLE		0x0B9
+#define UNIWILL_OSD_TOUCHPADWORKAROUND			0xFFF
 
-#define UNIWILL_OSD_TOUCHPADWORKAROUND		0xFFF
+#define UNIWILL_FN_LOCK_MASK				0x10
 
-#define UNIWILL_BRIGHTNESS_MIN			0x00
-#define UNIWILL_BRIGHTNESS_MAX			0xc8
-#define UNIWILL_BRIGHTNESS_DEFAULT		UNIWILL_BRIGHTNESS_MAX * 0.30
-#define UNIWILL_COLOR_DEFAULT			0xffffff
+#define UW_MEMORY_OVERCLOCKING_SWITCH			0x33
+#define UW_MEMORY_OVERCLOCKING_SUPPORT			0x60
+#define UW_CPU_PERFORMANCE_AND_OVERCLOCKING_SUPPORT	0x6E
+#define UW_CPU_PERFORMANCE_AND_OVERCLOCKING_SWITCH	0x6f
 
 static void uw_charging_priority_write_state(void);
 static void uw_charging_profile_write_state(void);
+static void uniwill_set_custom_profile_mode(bool zero_bit_initially);
 
 struct tuxedo_keyboard_driver uniwill_keyboard_driver;
-
-struct kbd_led_state_uw_t {
-	u32 brightness;
-	u32 color;
-} kbd_led_state_uw = {
-	.brightness = UNIWILL_BRIGHTNESS_DEFAULT,
-	.color = UNIWILL_COLOR_DEFAULT,
-};
 
 struct uniwill_device_features_t uniwill_device_features;
 
 static bool uw_feats_loaded = false;
 
-static u8 uniwill_kbd_bl_enable_state_on_start;
-static bool uniwill_kbd_bl_type_rgb_single_color = true;
+static u8 uniwill_kbd_bl_enable_state_on_start = 0xff;
 
 static struct key_entry uniwill_wmi_keymap[] = {
 	// { KE_KEY,	UNIWILL_OSD_RADIOON,		{ KEY_RFKILL } },
@@ -88,6 +90,13 @@ static struct key_entry uniwill_wmi_keymap[] = {
 	{ KE_KEY,	UNIWILL_KEY_KBDILLUMDOWN,	{ KEY_KBDILLUMDOWN } },
 	{ KE_KEY,	UNIWILL_KEY_KBDILLUMUP,		{ KEY_KBDILLUMUP } },
 	{ KE_KEY,	UNIWILL_KEY_KBDILLUMTOGGLE,	{ KEY_KBDILLUMTOGGLE } },
+	{ KE_KEY,	UNIWILL_OSD_KB_LED_LEVEL0,	{ KEY_KBDILLUMTOGGLE } },
+	{ KE_KEY,	UNIWILL_OSD_KB_LED_LEVEL1,	{ KEY_KBDILLUMTOGGLE } },
+	{ KE_KEY,	UNIWILL_OSD_KB_LED_LEVEL2,	{ KEY_KBDILLUMTOGGLE } },
+	{ KE_KEY,	UNIWILL_OSD_KB_LED_LEVEL3,	{ KEY_KBDILLUMTOGGLE } },
+	{ KE_KEY,	UNIWILL_OSD_KB_LED_LEVEL4,	{ KEY_KBDILLUMTOGGLE } },
+	// Send FN_ESC to user space as input-event-codes.h does not define Fn-Lock
+	{ KE_KEY,	UNIWILL_KEY_FN_LOCK,		{ KEY_FN_ESC } },
 	// Only used to put ev bits
 	{ KE_KEY,	0xffff,				{ KEY_F6 } },
 	{ KE_KEY,	0xffff,				{ KEY_LEFTALT } },
@@ -101,18 +110,9 @@ static struct uniwill_interfaces_t {
 
 uniwill_event_callb_t uniwill_event_callb;
 
-int uniwill_timer_delete(struct timer_list *timer)
+int uniwill_read_ec_ram(u16 address, u8 *data)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0)
-	return del_timer(timer);
-#else
-	return timer_delete(timer);
-#endif
-}
-
-u32 uniwill_read_ec_ram(u16 address, u8 *data)
-{
-	u32 status;
+	int status;
 
 	if (!IS_ERR_OR_NULL(uniwill_interfaces.wmi))
 		status = uniwill_interfaces.wmi->read_ec_ram(address, data);
@@ -125,9 +125,38 @@ u32 uniwill_read_ec_ram(u16 address, u8 *data)
 }
 EXPORT_SYMBOL(uniwill_read_ec_ram);
 
-u32 uniwill_write_ec_ram(u16 address, u8 data)
+int uniwill_read_ec_ram_with_retry(u16 address, u8 *data, int retries)
 {
-	u32 status;
+	int status, i;
+
+	for (i = 0; i < retries; ++i) {
+		status = uniwill_read_ec_ram(address, data);
+		if (status != 0)
+			pr_debug("uniwill_read_ec_ram(...) failed.\n");
+		else
+			break;
+	}
+
+	return status;
+}
+EXPORT_SYMBOL(uniwill_read_ec_ram_with_retry);
+
+static int uniwill_read_ec_ram_u16(u16 hibyte_address, u16 lobyte_address, u16 *data) {
+	int result;
+	u8 hi, lo;
+	result = uniwill_read_ec_ram(hibyte_address, &hi);
+	if (result)
+		return result;
+	result = uniwill_read_ec_ram(lobyte_address, &lo);
+	if (result)
+		return result;
+	*data = (hi << 8) | lo;
+	return result;
+}
+
+int uniwill_write_ec_ram(u16 address, u8 data)
+{
+	int status;
 
 	if (!IS_ERR_OR_NULL(uniwill_interfaces.wmi))
 		status = uniwill_interfaces.wmi->write_ec_ram(address, data);
@@ -140,10 +169,9 @@ u32 uniwill_write_ec_ram(u16 address, u8 data)
 }
 EXPORT_SYMBOL(uniwill_write_ec_ram);
 
-u32 uniwill_write_ec_ram_with_retry(u16 address, u8 data, int retries)
+int uniwill_write_ec_ram_with_retry(u16 address, u8 data, int retries)
 {
-	u32 status;
-	int i;
+	int status, i;
 	u8 control_data;
 
 	for (i = 0; i < retries; ++i) {
@@ -166,9 +194,26 @@ u32 uniwill_write_ec_ram_with_retry(u16 address, u8 data, int retries)
 }
 EXPORT_SYMBOL(uniwill_write_ec_ram_with_retry);
 
+
+int uniwill_wmi_evaluate(u8 function, u32 arg, u32 *return_buffer)
+{
+    int status;
+
+    if (!IS_ERR_OR_NULL(uniwill_interfaces.wmi) &&
+        !IS_ERR_OR_NULL(uniwill_interfaces.wmi->wmi_evaluate)) {
+        status = uniwill_interfaces.wmi->wmi_evaluate(function, arg, return_buffer);
+    } else {
+        pr_err("no active interface or ec_evaluate while calling function %u\n", function);
+        status = -EIO;
+    }
+
+    return status;
+}
+EXPORT_SYMBOL(uniwill_wmi_evaluate);
+
 static DEFINE_MUTEX(uniwill_interface_modification_lock);
 
-u32 uniwill_add_interface(struct uniwill_interface_t *interface)
+int uniwill_add_interface(struct uniwill_interface_t *interface)
 {
 	mutex_lock(&uniwill_interface_modification_lock);
 
@@ -190,7 +235,7 @@ u32 uniwill_add_interface(struct uniwill_interface_t *interface)
 }
 EXPORT_SYMBOL(uniwill_add_interface);
 
-u32 uniwill_remove_interface(struct uniwill_interface_t *interface)
+int uniwill_remove_interface(struct uniwill_interface_t *interface)
 {
 	mutex_lock(&uniwill_interface_modification_lock);
 
@@ -210,7 +255,7 @@ u32 uniwill_remove_interface(struct uniwill_interface_t *interface)
 }
 EXPORT_SYMBOL(uniwill_remove_interface);
 
-u32 uniwill_get_active_interface_id(char **id_str)
+int uniwill_get_active_interface_id(char **id_str)
 {
 	if (IS_ERR_OR_NULL(uniwill_interfaces.wmi))
 		return -ENODEV;
@@ -224,6 +269,10 @@ EXPORT_SYMBOL(uniwill_get_active_interface_id);
 
 static void key_event_work(struct work_struct *work)
 {
+	// Delay sometimes needed to make userspace reliably separate
+	// the touchpadtoggle key events from the custom key events
+	// coming from firmware
+	msleep(50);
 	sparse_keymap_report_known_event(
 		uniwill_keyboard_driver.input_device,
 		UNIWILL_OSD_TOUCHPADWORKAROUND,
@@ -231,378 +280,78 @@ static void key_event_work(struct work_struct *work)
 		true
 	);
 }
-
-// Previous key codes for detecting longer combination
-static u32 prev_key = 0, prevprev_key = 0;
 static DECLARE_WORK(uniwill_key_event_work, key_event_work);
-
-static int keyboard_notifier_callb(struct notifier_block *nb, unsigned long code, void *_param)
-{
-	struct keyboard_notifier_param *param = _param;
-	int ret = NOTIFY_OK;
-
-	if (!param->down) {
-
-		if (code == KBD_KEYCODE) {
-			switch (param->value) {
-			case 125:
-				// If the last keys up were 85 -> 29 -> 125
-				// manually report KEY_F21
-				if (prevprev_key == 85 && prev_key == 29) {
-					TUXEDO_DEBUG("Touchpad Toggle\n");
-					schedule_work(&uniwill_key_event_work);
-					ret = NOTIFY_OK;
-				}
-				break;
-			}
-			prevprev_key = prev_key;
-			prev_key = param->value;
-		}
-	}
-
-	return ret;
-}
-
-static struct notifier_block keyboard_notifier_block = {
-	.notifier_call = keyboard_notifier_callb
-};
-
-static u8 uniwill_read_kbd_bl_enabled(void)
-{
-	u8 backlight_data;
-	u8 enabled = 0xff;
-
-	uniwill_read_ec_ram(0x078c, &backlight_data);
-	enabled = (backlight_data >> 1) & 0x01;
-	enabled = !enabled;
-
-	return enabled;
-}
 
 static void uniwill_write_kbd_bl_enable(u8 enable)
 {
 	u8 backlight_data;
 	enable = enable & 0x01;
 
-	uniwill_read_ec_ram(0x078c, &backlight_data);
+	uniwill_read_ec_ram(UW_EC_REG_KBD_BL_STATUS, &backlight_data);
 	backlight_data = backlight_data & ~(1 << 1);
 	backlight_data |= (!enable << 1);
-	uniwill_write_ec_ram(0x078c, backlight_data);
-}
-
-/*static u32 uniwill_read_kbd_bl_br_state(u8 *brightness_state)
-{
-	u8 backlight_data;
-	u32 result;
-
-	uniwill_read_ec_ram(0x078c, &backlight_data);
-	*brightness_state = (backlight_data & 0xf0) >> 4;
-	result = 0;
-
-	return result;
-}*/
-
-static u32 uniwill_read_kbd_bl_rgb(u8 *red, u8 *green, u8 *blue)
-{
-	u32 result;
-
-	uniwill_read_ec_ram(0x1803, red);
-	uniwill_read_ec_ram(0x1805, green);
-	uniwill_read_ec_ram(0x1808, blue);
-
-	result = 0;
-
-	return result;
-}
-
-static void uniwill_write_kbd_bl_rgb(u8 red, u8 green, u8 blue)
-{
-	if (red > 0xc8) red = 0xc8;
-	if (green > 0xc8) green = 0xc8;
-	if (blue > 0xc8) blue = 0xc8;
-	uniwill_write_ec_ram(0x1803, red);
-	uniwill_write_ec_ram(0x1805, green);
-	uniwill_write_ec_ram(0x1808, blue);
-	TUXEDO_DEBUG("Wrote kbd color [%0#4x, %0#4x, %0#4x]\n", red, green, blue);
-}
-
-static void uniwill_write_kbd_bl_state(void) {
-	// Get single colors from state
-	u32 color_red = ((kbd_led_state_uw.color >> 0x10) & 0xff);
-	u32 color_green = (kbd_led_state_uw.color >> 0x08) & 0xff;
-	u32 color_blue = (kbd_led_state_uw.color >> 0x00) & 0xff;
-
-	u32 brightness_percentage = (kbd_led_state_uw.brightness * 100) / UNIWILL_BRIGHTNESS_MAX;
-
-	// Scale color values to valid range
-	color_red = (color_red * 0xc8) / 0xff;
-	color_green = (color_green * 0xc8) / 0xff;
-	color_blue = (color_blue * 0xc8) / 0xff;
-
-	// Scale the respective color values with brightness
-	color_red = (color_red * brightness_percentage) / 100;
-	color_green = (color_green * brightness_percentage) / 100;
-	color_blue = (color_blue * brightness_percentage) / 100;
-
-	uniwill_write_kbd_bl_rgb(color_red, color_green, color_blue);
-}
-
-static void uniwill_write_kbd_bl_reset(void)
-{
-	uniwill_write_ec_ram(0x078c, 0x10);
+	uniwill_write_ec_ram(UW_EC_REG_KBD_BL_STATUS, backlight_data);
 }
 
 void uniwill_event_callb(u32 code)
 {
-	if (uniwill_keyboard_driver.input_device != NULL)
-		if (!sparse_keymap_report_known_event(uniwill_keyboard_driver.input_device, code, 1, true)) {
-			TUXEDO_DEBUG("Unknown code - %d (%0#6x)\n", code, code);
-		}
-
-	// Special key combination when mode change key is pressed
-	if (code == 0xb0) {
-		input_report_key(uniwill_keyboard_driver.input_device, KEY_LEFTMETA, 1);
-		input_report_key(uniwill_keyboard_driver.input_device, KEY_LEFTALT, 1);
-		input_report_key(uniwill_keyboard_driver.input_device, KEY_F6, 1);
-		input_sync(uniwill_keyboard_driver.input_device);
-		input_report_key(uniwill_keyboard_driver.input_device, KEY_F6, 0);
-		input_report_key(uniwill_keyboard_driver.input_device, KEY_LEFTALT, 0);
-		input_report_key(uniwill_keyboard_driver.input_device, KEY_LEFTMETA, 0);
-		input_sync(uniwill_keyboard_driver.input_device);
-	}
-
-	// Keyboard backlight brightness toggle
-	if (uniwill_kbd_bl_type_rgb_single_color) {
-		switch (code) {
-		case UNIWILL_OSD_KB_LED_LEVEL0:
-			kbd_led_state_uw.brightness = 0x00;
-			uniwill_write_kbd_bl_state();
-			break;
-		case UNIWILL_OSD_KB_LED_LEVEL1:
-			kbd_led_state_uw.brightness = 0x20;
-			uniwill_write_kbd_bl_state();
-			break;
-		case UNIWILL_OSD_KB_LED_LEVEL2:
-			kbd_led_state_uw.brightness = 0x50;
-			uniwill_write_kbd_bl_state();
-			break;
-		case UNIWILL_OSD_KB_LED_LEVEL3:
-			kbd_led_state_uw.brightness = 0x80;
-			uniwill_write_kbd_bl_state();
-			break;
-		case UNIWILL_OSD_KB_LED_LEVEL4:
-			kbd_led_state_uw.brightness = 0xc8;
-			uniwill_write_kbd_bl_state();
-			break;
-		// Refresh keyboard state on cable switch event
-		case UNIWILL_OSD_DC_ADAPTER_CHANGE:
-			uniwill_write_kbd_bl_state();
-			break;
-		}
-	}
-
 	switch (code) {
-	case UNIWILL_OSD_DC_ADAPTER_CHANGE:
-		msleep(50);
-		uw_charging_priority_write_state();
-		break;
+		case UNIWILL_OSD_MODE_CHANGE_KEY_EVENT:
+			// Special key combination when mode change key is pressed (the one next to
+			// the power key). Opens TCC by default when installed.
+			input_report_key(uniwill_keyboard_driver.input_device, KEY_LEFTMETA, 1);
+			input_report_key(uniwill_keyboard_driver.input_device, KEY_LEFTALT, 1);
+			input_report_key(uniwill_keyboard_driver.input_device, KEY_F6, 1);
+			input_sync(uniwill_keyboard_driver.input_device);
+			input_report_key(uniwill_keyboard_driver.input_device, KEY_F6, 0);
+			input_report_key(uniwill_keyboard_driver.input_device, KEY_LEFTALT, 0);
+			input_report_key(uniwill_keyboard_driver.input_device, KEY_LEFTMETA, 0);
+			input_sync(uniwill_keyboard_driver.input_device);
+			break;
+		case UNIWILL_OSD_DC_ADAPTER_CHANGE:
+			// Refresh keyboard state and charging settings on cable switch event and make sure that the custom
+			// profile mode is still applied in case it's needed.
+			uniwill_set_custom_profile_mode(false);
+			uniwill_leds_restore_state_extern();
+			msleep(50);
+			uw_charging_priority_write_state();
+			uw_charging_profile_write_state();
+			break;
+		case UNIWILL_KEY_KBDILLUMTOGGLE:
+		case UNIWILL_OSD_KB_LED_LEVEL0:
+		case UNIWILL_OSD_KB_LED_LEVEL1:
+		case UNIWILL_OSD_KB_LED_LEVEL2:
+		case UNIWILL_OSD_KB_LED_LEVEL3:
+		case UNIWILL_OSD_KB_LED_LEVEL4:
+			// Notify userspace/UPower that the firmware changed the keyboard backlight
+			// brightness on white only keyboards. Fallthrough on other keyboards to
+			// emit KEY_KBDILLUMTOGGLE.
+			if (uniwill_leds_notify_brightness_change_extern())
+				return;
+			fallthrough;
+		default:
+			if (uniwill_keyboard_driver.input_device != NULL)
+				if (!sparse_keymap_report_known_event(uniwill_keyboard_driver.input_device, code, 1, true))
+					TUXEDO_DEBUG("Unknown code - %d (%0#6x)\n", code, code);
 	}
 }
 
-static ssize_t uw_brightness_show(struct device *child,
-				  struct device_attribute *attr, char *buffer)
+static void uniwill_set_custom_profile_mode(bool zero_bit_initially)
 {
-	return sprintf(buffer, "%d\n", kbd_led_state_uw.brightness);
-}
-
-static ssize_t uw_brightness_store(struct device *child,
-				   struct device_attribute *attr,
-				   const char *buffer, size_t size)
-{
-	u32 brightness_input;
-	int err = kstrtouint(buffer, 0, &brightness_input);
-	if (err) return err;
-	if (brightness_input > UNIWILL_BRIGHTNESS_MAX) return -EINVAL;
-	kbd_led_state_uw.brightness = (u8)brightness_input;
-	uniwill_write_kbd_bl_state();
-	return size;
-}
-
-static ssize_t uw_color_string_show(struct device *child,
-				 struct device_attribute *attr, char *buffer)
-{
-	int i;
-	sprintf(buffer, "Color values:");
-	for (i = 0; i < color_list.size; ++i) {
-		sprintf(buffer + strlen(buffer), " %s",
-			color_list.colors[i].name);
-	}
-	sprintf(buffer + strlen(buffer), "\n");
-	return strlen(buffer);
-}
-
-static ssize_t uw_color_string_store(struct device *child,
-				   struct device_attribute *attr,
-				   const char *buffer, size_t size)
-{
-	u32 color_value;
-	char *buffer_copy;
-
-	buffer_copy = kmalloc(size + 1, GFP_KERNEL);
-	strcpy(buffer_copy, buffer);
-	color_value = color_lookup(&color_list, strstrip(buffer_copy));
-	kfree(buffer_copy);
-
-	if (color_value > 0xffffff) return -EINVAL;
-	kbd_led_state_uw.color = color_value;
-	uniwill_write_kbd_bl_state();
-	return size;
-}
-
-// Device attributes used by uw kbd
-struct uw_kbd_dev_attrs_t {
-	struct device_attribute brightness;
-	struct device_attribute color_string;
-} uw_kbd_dev_attrs = {
-	.brightness = __ATTR(brightness, 0644, uw_brightness_show, uw_brightness_store),
-	.color_string = __ATTR(color_string, 0644, uw_color_string_show, uw_color_string_store)
-};
-
-// Device attributes used for uw_kbd_bl_color
-static struct attribute *uw_kbd_bl_color_attrs[] = {
-	&uw_kbd_dev_attrs.brightness.attr,
-	&uw_kbd_dev_attrs.color_string.attr,
-	NULL
-};
-
-static struct attribute_group uw_kbd_bl_color_attr_group = {
-	.name = "uw_kbd_bl_color",
-	.attrs = uw_kbd_bl_color_attrs
-};
-
-static void uw_kbd_bl_init_set(void)
-{
-	if (uniwill_kbd_bl_type_rgb_single_color) {
-		// Reset keyboard backlight
-		uniwill_write_kbd_bl_reset();
-		// Make sure reset finish before continue
-		msleep(100);
-
-		// Disable backlight while initializing
-		// uniwill_write_kbd_bl_enable(0);
-
-		// Update keyboard backlight according to the current state
-		uniwill_write_kbd_bl_state();
-	}
-
-	// Enable keyboard backlight
-	uniwill_write_kbd_bl_enable(1);
-}
-
-// Keep track of previous colors on start, init array with different non-colors
-static u32 uw_prev_colors[] = {0x01000000, 0x02000000, 0x03000000};
-static u32 uw_prev_colors_size = 3;
-static u32 uw_prev_colors_index = 0;
-
-// Timer for checking animation colors
-static struct timer_list uw_kbd_bl_init_timer;
-static volatile int uw_kbd_bl_check_count = 40;
-static int uw_kbd_bl_init_check_interval_ms = 500;
-
-static void uw_kbd_bl_init_ready_check_work_func(struct work_struct *work)
-{
-	u8 uw_cur_red, uw_cur_green, uw_cur_blue;
-	int i;
-	bool prev_colors_same;
-	uniwill_read_kbd_bl_rgb(&uw_cur_red, &uw_cur_green, &uw_cur_blue);
-	uw_prev_colors[uw_prev_colors_index] = (uw_cur_red << 0x10) | (uw_cur_green << 0x08) | uw_cur_blue;
-	uw_prev_colors_index = (uw_prev_colors_index + 1) % uw_prev_colors_size;
-
-	prev_colors_same = true;
-	for (i = 1; i < uw_prev_colors_size; ++i) {
-		if (uw_prev_colors[i-1] != uw_prev_colors[i]) prev_colors_same = false;
-	}
-
-	if (prev_colors_same) {
-		uw_kbd_bl_init_set();
-		uniwill_timer_delete(&uw_kbd_bl_init_timer);
-	} else {
-		if (uw_kbd_bl_check_count != 0) {
-			mod_timer(&uw_kbd_bl_init_timer, jiffies + msecs_to_jiffies(uw_kbd_bl_init_check_interval_ms));
-		} else {
-			TUXEDO_INFO("uw kbd init timeout, failed to detect end of boot animation\n");
-			uniwill_timer_delete(&uw_kbd_bl_init_timer);
+	// Set custom profile mode if needed
+	struct uniwill_device_features_t *uw_feats = uniwill_get_device_features();
+	if (uw_feats->uniwill_custom_profile_mode_needed) {
+		u8 data;
+		uniwill_read_ec_ram(UW_EC_REG_CUSTOM_PROFILE, &data);
+		if (zero_bit_initially) {
+			// Certain devices seem to need this first reset to zero on boot to have it properly applied
+			data &= ~(1 << 6);
+			uniwill_write_ec_ram(UW_EC_REG_CUSTOM_PROFILE, data);
+			msleep(50);
 		}
+		data |= (1 << 6);
+		uniwill_write_ec_ram(UW_EC_REG_CUSTOM_PROFILE, data);
 	}
-
-	uw_kbd_bl_check_count -= 1;
-}
-
-static DECLARE_WORK(uw_kbd_bl_init_ready_check_work, uw_kbd_bl_init_ready_check_work_func);
-
-static void uw_kbd_bl_init_ready_check(struct timer_list *t)
-{
-	schedule_work(&uw_kbd_bl_init_ready_check_work);
-}
-
-static int uw_kbd_bl_init(struct platform_device *dev)
-{
-	int status = 0;
-
-	uniwill_kbd_bl_type_rgb_single_color = false
-		// New names
-		| dmi_match(DMI_BOARD_NAME, "POLARIS1501A1650TI")
-		| dmi_match(DMI_BOARD_NAME, "POLARIS1501A2060")
-		| dmi_match(DMI_BOARD_NAME, "POLARIS1501I1650TI")
-		| dmi_match(DMI_BOARD_NAME, "POLARIS1501I2060")
-		| dmi_match(DMI_BOARD_NAME, "POLARIS1701A1650TI")
-		| dmi_match(DMI_BOARD_NAME, "POLARIS1701A2060")
-		| dmi_match(DMI_BOARD_NAME, "POLARIS1701I1650TI")
-		| dmi_match(DMI_BOARD_NAME, "POLARIS1701I2060")
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0)
-		| dmi_match(DMI_PRODUCT_SKU, "POLARIS1XA02")
-		| dmi_match(DMI_PRODUCT_SKU, "POLARIS1XI02")
-		| dmi_match(DMI_PRODUCT_SKU, "POLARIS1XA03")
-		| dmi_match(DMI_PRODUCT_SKU, "POLARIS1XI03")
-#endif
-
-		// Old names
-		// | dmi_match(DMI_BOARD_NAME, "Polaris15I01")
-		// | dmi_match(DMI_BOARD_NAME, "Polaris17I01")
-		// | dmi_match(DMI_BOARD_NAME, "Polaris15A01")
-		// | dmi_match(DMI_BOARD_NAME, "Polaris1501I2060")
-		// | dmi_match(DMI_BOARD_NAME, "Polaris1701I2060")
-		;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0)
-	TUXEDO_ERROR(
-		"Warning: Kernel version less that 4.18, keyboard backlight might not be properly recognized.");
-#endif
-
-	// Save previous enable state
-	uniwill_kbd_bl_enable_state_on_start = uniwill_read_kbd_bl_enabled();
-
-	if (uniwill_kbd_bl_type_rgb_single_color) {
-		// Initialize keyboard backlight driver state according to parameters
-		if (param_brightness > UNIWILL_BRIGHTNESS_MAX) param_brightness = UNIWILL_BRIGHTNESS_DEFAULT;
-		kbd_led_state_uw.brightness = param_brightness;
-		if (color_lookup(&color_list, param_color) <= (u32) 0xffffff) kbd_led_state_uw.color = color_lookup(&color_list, param_color);
-		else kbd_led_state_uw.color = UNIWILL_COLOR_DEFAULT;
-
-		// Init sysfs bl attributes group
-		status = sysfs_create_group(&dev->dev.kobj, &uw_kbd_bl_color_attr_group);
-		if (status) TUXEDO_ERROR("Failed to create sysfs group\n");
-
-		// Start periodic checking of animation, set and enable bl when done
-		timer_setup(&uw_kbd_bl_init_timer, uw_kbd_bl_init_ready_check, 0);
-		mod_timer(&uw_kbd_bl_init_timer, jiffies + msecs_to_jiffies(uw_kbd_bl_init_check_interval_ms));
-	} else {
-		// For non-RGB versions
-		// Enable keyboard backlight immediately (should it be disabled)
-		uniwill_write_kbd_bl_enable(1);
-	}
-
-	return status;
 }
 
 #define UNIWILL_LIGHTBAR_LED_MAX_BRIGHTNESS	0x24
@@ -853,14 +602,40 @@ static int uw_has_charging_priority(bool *status)
 	u8 data;
 	int result;
 
-	bool not_supported_device = false
-		|| dmi_match(DMI_BOARD_NAME, "PF5PU1G")
-		|| dmi_match(DMI_BOARD_NAME, "LAPQC71A")
-		|| dmi_match(DMI_BOARD_NAME, "LAPQC71B")
-		|| dmi_match(DMI_PRODUCT_NAME, "A60 MUV")
-	;
+	/*
+	 * The ODM dropped this feature for certain reasons by just disabling the feature within their Control Center.
+	 * Therefore every device using the control center until version 5.9.49.16 at least theoretically supports the
+	 * feature. However, due to the support identification bit, being listed among the following devices does not
+	 * automatically mean that this device supports the feature.
+	 * After 5.9.50.3 devices may still have the support identification bit set but don't officially support the
+	 * feature anymore.
+	*/
+	bool device_before_feature_drop = false
+		|| dmi_match(DMI_BOARD_NAME, "PH4PRX1_PH6PRX1") // IBP Gen8
+		|| dmi_match(DMI_BOARD_NAME, "PH6PG01_PH6PG71")
+		|| dmi_match(DMI_BOARD_NAME, "PH4PG31")
+		|| dmi_match(DMI_BOARD_NAME, "PHxARX1_PHxAQF1") // IBP Gen7
+		|| dmi_match(DMI_BOARD_NAME, "PH6AG01_PH6AQ71_PH6AQI1")
+		|| dmi_match(DMI_BOARD_NAME, "PHxTxX1") // IBP Gen6
+		|| dmi_match(DMI_BOARD_NAME, "GMxXGxx") // Polaris Gen5
+		|| dmi_match(DMI_BOARD_NAME, "GMxNGxx") // Polaris Gen3
+		|| dmi_match(DMI_BOARD_NAME, "GMxTGxx") // Stellaris/Polaris Gen3
+		|| dmi_match(DMI_BOARD_NAME, "GMxZGxx") // Stellaris Gen3
+		|| dmi_match(DMI_BOARD_NAME, "GMxMGxx") // Polaris Gen2
+		|| dmi_match(DMI_BOARD_NAME, "POLARIS1501I1650TI") // Polaris Gen1
+		|| dmi_match(DMI_BOARD_NAME, "POLARIS1501A1650TI")
+		|| dmi_match(DMI_BOARD_NAME, "POLARIS1701A1650TI")
+		|| dmi_match(DMI_BOARD_NAME, "POLARIS1701I1650TI")
+		|| dmi_match(DMI_BOARD_NAME, "POLARIS1501I2060")
+		|| dmi_match(DMI_BOARD_NAME, "POLARIS1501A2060")
+		|| dmi_match(DMI_BOARD_NAME, "POLARIS1701I2060")
+		|| dmi_match(DMI_BOARD_NAME, "POLARIS1701A2060")
+		|| dmi_match(DMI_BOARD_NAME, "PF5LUXG") // Pulse Gen2
+		|| dmi_match(DMI_BOARD_NAME, "PULSE1401") // Pulse Gen1
+		|| dmi_match(DMI_BOARD_NAME, "PULSE1501")
+		;
 
-	if (not_supported_device) {
+	if (!device_before_feature_drop) {
 		*status = false;
 		return 0;
 	}
@@ -899,7 +674,7 @@ static void uw_charging_priority_init(struct platform_device *dev)
 }
 
 static bool uw_charging_profile_loaded = false;
-static bool uw_charging_profile_last_written_value;
+static u8 uw_charging_profile_last_written_value;
 
 static ssize_t uw_charging_profiles_available_show(struct device *child,
 						   struct device_attribute *attr,
@@ -937,16 +712,18 @@ static struct attribute_group uw_charging_profile_attr_group = {
  */
 static int uw_set_charging_profile(u8 charging_profile)
 {
-	u8 previous_data, next_data;
+	u8 previous_data, next_data, shifted_profile;
 	int result;
 
-	charging_profile = (charging_profile & 0x03) << 4;
+	/* Store unshifted value (0-2) for later restoration */
+	charging_profile = charging_profile & 0x03;
+	shifted_profile = charging_profile << 4;
 
 	result = uniwill_read_ec_ram(0x07a6, &previous_data);
 	if (result != 0)
 		return result;
 
-	next_data = (previous_data & ~(0x03 << 4)) | charging_profile;
+	next_data = (previous_data & ~(0x03 << 4)) | shifted_profile;
 	result = uniwill_write_ec_ram(0x07a6, next_data);
 
 	if (result == 0)
@@ -1171,10 +948,746 @@ static ssize_t uw_charging_prio_store(struct device *child,
 		return -EINVAL;
 }
 
+/*
+ * We didn't find any identification bits to retrieve the information if the
+ * device supports the features usb_powershare and ac_auto_boot. The nb02
+ * control center reads the support flag either from the registry or from the
+ * UniWillVariable efivar. The efivar most likely stores this information at an
+ * offset of 92 bytes. However, tests have shown that the control center most
+ * likely sets the bit in this variable itself dynamically, so we have to check
+ * DMI strings for now.
+ */
+static int is_auto_boot_and_powershare_supported(bool *status)
+{
+	*status = false ||
+		  // IBP Gen9
+		  dmi_match(DMI_BOARD_NAME, "GXxMRXx") ||
+		  dmi_match(DMI_BOARD_NAME, "GXxHRXx") ||
+		  // IBP Gen10
+		  dmi_match(DMI_BOARD_NAME, "XxHP4NAx") ||
+		  dmi_match(DMI_BOARD_NAME, "XxKK4NAx_XxSP4NAx") ||
+		  dmi_match(DMI_BOARD_NAME, "XxAR4NAx") ||
+
+		  // Stellaris Gen6
+		  dmi_match(DMI_BOARD_NAME, "GM6IXxB_MB1") ||
+		  dmi_match(DMI_BOARD_NAME, "GM6IXxB_MB2") ||
+		  dmi_match(DMI_BOARD_NAME, "GM7IXxN") ||
+		  // Stellaris Gen7
+		  dmi_match(DMI_BOARD_NAME, "X6AR5xxY") ||
+		  dmi_match(DMI_BOARD_NAME, "X6AR5xxY_mLED") ||
+		  dmi_match(DMI_BOARD_NAME, "X6FR5xxY") ||
+
+		  // Stellaris Slim Gen6
+		  dmi_match(DMI_BOARD_NAME, "GMxHGxx") ||
+		  dmi_match(DMI_BOARD_NAME, "GM5IXxA") ||
+
+		  // InfinityBook Max Gen10
+		  dmi_match(DMI_BOARD_NAME, "X5KK45xS_X5SP45xS");
+
+	return 0;
+}
+
+static bool uw_ac_auto_boot_loaded = false;
+static bool uw_ac_auto_boot_last_written_value;
+
+static ssize_t uw_ac_auto_boot_show(struct device *child,
+				    struct device_attribute *attr,
+				    char *buffer);
+static ssize_t uw_ac_auto_boot_store(struct device *child,
+				     struct device_attribute *attr,
+				     const char *buffer, size_t size);
+
+struct uw_ac_auto_boot_attrs_t
+{
+	struct device_attribute ac_auto_boot;
+} uw_ac_auto_boot_attrs = {
+	.ac_auto_boot = __ATTR(ac_auto_boot, 0644, uw_ac_auto_boot_show, uw_ac_auto_boot_store)
+};
+
+static struct attribute *uw_ac_auto_boot_attrs_list[] = {
+	&uw_ac_auto_boot_attrs.ac_auto_boot.attr,
+	NULL};
+
+static struct attribute_group uw_ac_auto_boot_attr_group = {
+	.name = "ac_auto_boot",
+	.attrs = uw_ac_auto_boot_attrs_list};
+
+static int uw_set_ac_auto_boot(u8 ac_auto_boot)
+{
+	u8 previous_data, next_data;
+	int result;
+
+	ac_auto_boot = (ac_auto_boot & 0x01) << 3;
+
+	result = uniwill_read_ec_ram(UW_EC_REG_AC_AUTO_BOOT_STATUS,
+				     &previous_data);
+	if (result != 0)
+		return result;
+
+	next_data = (previous_data & ~(1 << 3)) | ac_auto_boot;
+	result = uniwill_write_ec_ram(UW_EC_REG_AC_AUTO_BOOT_STATUS, next_data);
+	if (result == 0)
+		uw_ac_auto_boot_last_written_value = ac_auto_boot;
+
+	return result;
+}
+
+static int uw_get_ac_auto_boot(u8 *ac_auto_boot)
+{
+	int result;
+	result = uniwill_read_ec_ram(UW_EC_REG_AC_AUTO_BOOT_STATUS,
+				     ac_auto_boot);
+	if (result == 0)
+		*ac_auto_boot = (*ac_auto_boot >> 3) & 0x01;
+	return result;
+}
+
+static int uw_has_ac_auto_boot(bool *status)
+{
+	return is_auto_boot_and_powershare_supported(status);
+}
+
+static void uw_ac_auto_boot_init(struct platform_device *dev)
+{
+	u8 value;
+	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
+
+	if (uw_feats->uniwill_has_ac_auto_boot)
+		uw_ac_auto_boot_loaded =
+			sysfs_create_group(&dev->dev.kobj,
+					   &uw_ac_auto_boot_attr_group) == 0;
+
+	// Read for state init
+	if (uw_ac_auto_boot_loaded) {
+		uw_get_ac_auto_boot(&value);
+		uw_ac_auto_boot_last_written_value = value;
+	}
+}
+
+static ssize_t uw_ac_auto_boot_show(struct device *child,
+				    struct device_attribute *attr,
+				    char *buffer)
+{
+	u8 ac_auto_boot_value;
+	int result;
+
+	result = uw_get_ac_auto_boot(&ac_auto_boot_value);
+	if (result == 0)
+		return sprintf(buffer, "%d\n", ac_auto_boot_value);
+
+	return -EIO;
+}
+
+static ssize_t uw_ac_auto_boot_store(struct device *child,
+				     struct device_attribute *attr,
+				     const char *buffer, size_t size)
+{
+	u8 ac_auto_boot_value;
+	int result;
+
+	if (kstrtou8(buffer, 10, &ac_auto_boot_value) ||
+	    ac_auto_boot_value < 0 || ac_auto_boot_value > 1)
+		return -EINVAL;
+
+	result = uw_set_ac_auto_boot(ac_auto_boot_value);
+	if (result == 0)
+		return size;
+	else
+		return -EIO;
+}
+
+static bool uw_usb_powershare_loaded = false;
+static bool uw_usb_powershare_last_written_value;
+
+static ssize_t uw_usb_powershare_show(struct device *child,
+				      struct device_attribute *attr,
+				      char *buffer);
+static ssize_t uw_usb_powershare_store(struct device *child,
+				       struct device_attribute *attr,
+				       const char *buffer, size_t size);
+
+struct uw_usb_powershare_attrs_t
+{
+	struct device_attribute usb_powershare;
+} uw_usb_powershare_attrs = {
+	.usb_powershare = __ATTR(usb_powershare, 0644, uw_usb_powershare_show, uw_usb_powershare_store)
+};
+
+static struct attribute *uw_usb_powershare_attrs_list[] = {
+	&uw_usb_powershare_attrs.usb_powershare.attr,
+	NULL};
+
+static struct attribute_group uw_usb_powershare_attr_group = {
+	.name = "usb_powershare",
+	.attrs = uw_usb_powershare_attrs_list};
+
+static int uw_set_usb_powershare(u8 usb_powershare)
+{
+	u8 previous_data, next_data;
+	int result;
+	usb_powershare = (usb_powershare & 0x01) << 4;
+
+	result = uniwill_read_ec_ram(UW_EC_REG_USB_POWERSHARE_STATUS,
+				     &previous_data);
+	if (result != 0)
+		return result;
+
+	next_data = (previous_data & ~(1 << 4)) | usb_powershare;
+	// This bit is set to 0 after a cold boot regardless of its original value for some reason.
+	result = uniwill_write_ec_ram(UW_EC_REG_USB_POWERSHARE_STATUS,
+				      next_data);
+	if (result == 0)
+		uw_usb_powershare_last_written_value = usb_powershare;
+
+	return result;
+}
+
+static int uw_get_usb_powershare(u8 *usb_powershare)
+{
+	int result;
+	result = uniwill_read_ec_ram(UW_EC_REG_USB_POWERSHARE_STATUS,
+				     usb_powershare);
+	if (result == 0)
+		*usb_powershare = (*usb_powershare >> 4) & 0x01;
+	return result;
+}
+
+static int uw_has_usb_powershare(bool *status)
+{
+	return is_auto_boot_and_powershare_supported(status);
+}
+
+static void uw_usb_powershare_init(struct platform_device *dev)
+{
+	u8 value;
+	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
+
+	if (uw_feats->uniwill_has_usb_powershare)
+		uw_usb_powershare_loaded =
+			sysfs_create_group(&dev->dev.kobj,
+					   &uw_usb_powershare_attr_group) == 0;
+
+	// Read for state init
+	if (uw_usb_powershare_loaded) {
+		uw_get_usb_powershare(&value);
+		uw_usb_powershare_last_written_value = value;
+	}
+}
+
+static ssize_t uw_usb_powershare_show(struct device *child,
+				      struct device_attribute *attr,
+				      char *buffer)
+{
+	u8 usb_powershare_value;
+	int result;
+
+	result = uw_get_usb_powershare(&usb_powershare_value);
+	if (result == 0)
+		return sprintf(buffer, "%d\n", usb_powershare_value);
+
+	return -EIO;
+}
+
+static ssize_t uw_usb_powershare_store(struct device *child,
+				       struct device_attribute *attr,
+				       const char *buffer, size_t size)
+{
+	u8 usb_powershare_value;
+	int result;
+
+	if (kstrtou8(buffer, 10, &usb_powershare_value) ||
+	    usb_powershare_value < 0 || usb_powershare_value > 1)
+		return -EINVAL;
+
+	result = uw_set_usb_powershare(usb_powershare_value);
+	if (result == 0)
+		return size;
+	else
+		return -EIO;
+}
+
+static ssize_t raw_cycle_count_show(struct device *device,
+				struct device_attribute *attr,
+				char *buf)
+{
+	int result;
+	u16 cycle_count;
+	result = uniwill_read_ec_ram_u16(UW_EC_REG_BATTERY_CYCN_HI, UW_EC_REG_BATTERY_CYCN_LO, &cycle_count);
+	if (result)
+		return result;
+	return snprintf(buf, PAGE_SIZE, "%d\n", cycle_count);
+}
+
+static ssize_t raw_xif1_show(struct device *device,
+				struct device_attribute *attr,
+				char *buf)
+{
+	int result;
+	u16 xif1;
+	result = uniwill_read_ec_ram_u16(UW_EC_REG_BATTERY_XIF1_HI, UW_EC_REG_BATTERY_XIF1_LO, &xif1);
+	if (result)
+		return result;
+	return snprintf(buf, PAGE_SIZE, "%d\n", xif1);
+}
+
+static ssize_t raw_xif2_show(struct device *device,
+				struct device_attribute *attr,
+				char *buf)
+{
+	int result;
+	u16 xif2;
+	result = uniwill_read_ec_ram_u16(UW_EC_REG_BATTERY_XIF2_HI, UW_EC_REG_BATTERY_XIF2_LO, &xif2);
+	if (result)
+		return result;
+	return snprintf(buf, PAGE_SIZE, "%d\n", xif2);
+}
+
+static DEVICE_ATTR_RO(raw_cycle_count);
+static DEVICE_ATTR_RO(raw_xif1);
+static DEVICE_ATTR_RO(raw_xif2);
+
+static struct attribute *uw_battery_attrs[] = {
+	&dev_attr_raw_cycle_count.attr,
+	&dev_attr_raw_xif1.attr,
+	&dev_attr_raw_xif2.attr,
+	NULL,
+};
+
+ATTRIBUTE_GROUPS(uw_battery);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0)
+static int uw_battery_add(struct power_supply *battery)
+#else
+static int uw_battery_add(struct power_supply *battery, struct acpi_battery_hook *hook)
+#endif
+{
+	TUXEDO_DEBUG("uw_battery_add\n");
+	if (device_add_groups(&battery->dev, uw_battery_groups))
+		return -ENODEV;
+
+	return 0;
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0)
+static int uw_battery_remove(struct power_supply *battery)
+#else
+static int uw_battery_remove(struct power_supply *battery, struct acpi_battery_hook *hook)
+#endif
+{
+	TUXEDO_DEBUG("uw_battery_remove\n");
+	device_remove_groups(&battery->dev, uw_battery_groups);
+	return 0;
+}
+
+static struct acpi_battery_hook uw_battery_hook = {
+	.add_battery = uw_battery_add,
+	.remove_battery = uw_battery_remove,
+	.name = "TUXEDO Battery Extension",
+};
+
+static bool uw_battery_hook_registered = false;
+
+static void uw_battery_init(void)
+{
+	battery_hook_register(&uw_battery_hook);
+	uw_battery_hook_registered = true;
+}
+
+static void uw_battery_uninit(void)
+{
+	if (uw_battery_hook_registered)
+		battery_hook_unregister(&uw_battery_hook);
+	else
+		TUXEDO_ERROR("attempted to unregister battery hook which was not registered\n");
+}
+
+
+static bool uw_mini_led_local_dimming_loaded = false;
+static bool uw_mini_led_local_dimming_last_written_value;
+
+static ssize_t uw_mini_led_local_dimming_show(struct device *child,
+				     struct device_attribute *attr, char *buffer);
+static ssize_t uw_mini_led_local_dimming_store(struct device *child,
+				      struct device_attribute *attr,
+				      const char *buffer, size_t size);
+
+struct uw_mini_led_local_dimming_attrs_t {
+	struct device_attribute mini_led_local_dimming;
+} uw_mini_led_local_dimming_attrs = {
+	.mini_led_local_dimming = __ATTR(mini_led_local_dimming, 0644, uw_mini_led_local_dimming_show, uw_mini_led_local_dimming_store)
+};
+
+static struct attribute *uw_mini_led_local_dimming_attrs_list[] = {
+	&uw_mini_led_local_dimming_attrs.mini_led_local_dimming.attr,
+	NULL
+};
+
+static struct attribute_group uw_mini_led_local_dimming_attr_group = {
+	.name = "mini_led_local_dimming",
+	.attrs = uw_mini_led_local_dimming_attrs_list
+};
+
+/*
+ * mini_led_local_dimming values
+ *     0 => local dimming off
+ *     1 => local dimming on
+ */
+static int uw_set_mini_led_local_dimming(u8 mini_led_local_dimming)
+{
+	int result;
+	u32 uw_data[10];
+
+	if (mini_led_local_dimming == 1) {
+		result = uniwill_wmi_evaluate(UNIWILL_WMI_FUNCTION_FEATURE_TOGGLE,
+					    UNIWILL_WMI_LOCAL_DIMMING_ON,
+					    uw_data);
+	} else {
+		result = uniwill_wmi_evaluate(UNIWILL_WMI_FUNCTION_FEATURE_TOGGLE,
+					    UNIWILL_WMI_LOCAL_DIMMING_OFF,
+					    uw_data);
+	}
+	if (result != 0)
+		return result;
+
+	uw_mini_led_local_dimming_last_written_value = mini_led_local_dimming;
+
+	return result;
+}
+
+static int uw_get_mini_led_local_dimming(u8 *mini_led_local_dimming)
+{
+	/*
+	 * As of now, we do not have any possibility to read out the current state of local dimming. However,
+	 * as this feature is set to disabled on boot per default by calling uw_set_mini_led_local_dimming,
+	 * uw_mini_led_local_dimming_last_written_value is always initialized and thereby should not cause
+	 * any harm.
+	 *
+	 * A rather hacky solution could be the following, as uniwill_wmi_evaluate writes the current state
+	 * into the return buffer before overwriting it:
+
+	 * u32 return_buffer;
+	 * bool initial_status;
+	 * uniwill_wmi_evaluate(local_dimming, off, return_buffer);
+	 * if (return_buffer == UNIWILL_WMI_LOCAL_DIMMING_ON)
+	 * 	initial_status = true;
+	 * else
+	 * 	initial_status = false;
+	 * uniwill_wmi_evaluate(local_dimming, initial_status, return_buffer);
+	 * *mini_led_local_dimming = initial_status;
+	 */
+	*mini_led_local_dimming = uw_mini_led_local_dimming_last_written_value;
+	return 0;
+}
+
+static int uw_has_mini_led_local_dimming(bool *status)
+{
+	u8 data;
+	int result;
+
+	result = uniwill_read_ec_ram(UW_EC_REG_MINI_LED_LOCAL_DIMMING_SUPPORT,
+				     &data);
+	if (result)
+		return result;
+
+	*status = (data != 0xFF) && ((data & 0x01) > 0);
+	return 0;
+}
+
+static void uw_mini_led_local_dimming_init(struct platform_device *dev)
+{
+	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
+
+	if (uw_feats->uniwill_has_mini_led_local_dimming)
+		uw_mini_led_local_dimming_loaded = sysfs_create_group(&dev->dev.kobj, &uw_mini_led_local_dimming_attr_group) == 0;
+
+	// Set default to off
+	uw_set_mini_led_local_dimming(false);
+}
+
+static ssize_t uw_mini_led_local_dimming_show(struct device *child,
+				      struct device_attribute *attr,
+				      char *buffer)
+{
+	u8 mini_led_local_dimming_value;
+	int result;
+
+	result = uw_get_mini_led_local_dimming(&mini_led_local_dimming_value);
+	if (result == 0)
+		return sprintf(buffer, "%d\n", mini_led_local_dimming_value);
+
+	return -EIO;
+}
+
+static ssize_t uw_mini_led_local_dimming_store(struct device *child,
+				       struct device_attribute *attr,
+				       const char *buffer, size_t size)
+{
+	u8 mini_led_local_dimming_value;
+	int result;
+
+	if (kstrtou8(buffer, 10, &mini_led_local_dimming_value) ||
+	    mini_led_local_dimming_value < 0 || mini_led_local_dimming_value > 1)
+		return -EINVAL;
+
+	result = uw_set_mini_led_local_dimming(mini_led_local_dimming_value);
+	if (result == 0)
+		return size;
+	else
+		return -EIO;
+}
+
+static efi_guid_t uw_oem_magic_guid =
+	EFI_GUID(0x9f33f85c, 0x13ca, 0x4fd1,
+	         0x9c, 0x4a, 0x96, 0x21, 0x77, 0x22, 0xc5, 0x93);
+
+static int uw_has_hidden_bios_options(bool *status)
+{
+	*status = false
+		// Stellaris 16 G7
+		|| dmi_match(DMI_BOARD_NAME, "X6AR5xxY")
+		|| dmi_match(DMI_BOARD_NAME, "X6AR5xxY_mLED")
+		// IBM 16 G10
+		|| dmi_match(DMI_BOARD_NAME, "X6AR55xU");
+	return 0;
+}
+
+static void uw_show_hidden_bios_options(void)
+{
+	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
+	efi_status_t st;
+	u32 attr = 0;
+	unsigned long size = 0;
+	u8 *buf = NULL;
+	bool changed = false;
+	efi_char16_t name[] = L"OemMagicVariable";
+	u8 b1, b2;
+
+	if (!uw_feats->uniwill_has_hidden_bios_options) {
+		pr_debug("hidden_bios_options: not supported on this device\n");
+		return;
+	}
+
+	if (!efi_enabled(EFI_RUNTIME_SERVICES)) {
+		pr_warn(
+			"hidden_bios_options: EFI runtime services not available\n");
+		return;
+	}
+
+	st = efi.get_variable(name, &uw_oem_magic_guid, &attr, &size, NULL);
+	if (st != EFI_BUFFER_TOO_SMALL) {
+		pr_err(
+			"hidden_bios_options: get_variable probe failed: st=0x%lx\n",
+			(unsigned long)st);
+		return;
+	}
+
+	if (size <= UW_CPU_PERFORMANCE_AND_OVERCLOCKING_SWITCH) {
+		pr_err(
+			"hidden_bios_options: EFI variable too small (%lu bytes)\n",
+			size);
+		return;
+	}
+
+	buf = kmalloc(size, GFP_KERNEL);
+	if (!buf) {
+		pr_err("hidden_bios_options: something went wrong during allocating read buffer\n");
+		return;
+	}
+
+	st = efi.get_variable(name, &uw_oem_magic_guid, &attr, &size, buf);
+	if (st != EFI_SUCCESS) {
+		pr_err(
+			"hidden_bios_options: get_variable read failed: st=0x%lx\n",
+			(unsigned long)st);
+		kfree(buf);
+		return;
+	}
+
+	if (buf[UW_MEMORY_OVERCLOCKING_SUPPORT] != 0x01 ||
+	    buf[UW_CPU_PERFORMANCE_AND_OVERCLOCKING_SUPPORT] != 0x01) {
+		pr_warn(
+			"hidden_bios_options: support bits not set (mem=0x%02x cpu=0x%02x) -> skip\n",
+			buf[UW_MEMORY_OVERCLOCKING_SUPPORT],
+			buf[UW_CPU_PERFORMANCE_AND_OVERCLOCKING_SUPPORT]);
+		kfree(buf);
+		return;
+	}
+
+	b1 = buf[UW_MEMORY_OVERCLOCKING_SWITCH];
+	b2 = buf[UW_CPU_PERFORMANCE_AND_OVERCLOCKING_SWITCH];
+
+	if (!((b1 == 0x00 || b1 == 0x01) && (b2 == 0x00 || b2 == 0x01))) {
+		pr_err("hidden_bios_options: unexpected byte values off1=0x%02x off2=0x%02x -> skip\n",
+			b1, b2);
+		kfree(buf);
+		return;
+	}
+
+	if (b1 == 0x00) {
+		buf[UW_MEMORY_OVERCLOCKING_SWITCH] = 0x01;
+		changed = true;
+	}
+	if (b2 == 0x00) {
+		buf[UW_CPU_PERFORMANCE_AND_OVERCLOCKING_SWITCH] = 0x01;
+		changed = true;
+	}
+
+	if (!changed) {
+		pr_debug("hidden_bios_options: already enabled\n");
+		kfree(buf);
+		return;
+	}
+
+	st = efi.set_variable(name, &uw_oem_magic_guid, attr, size, buf);
+	if (st != EFI_SUCCESS) {
+		pr_warn("hidden_bios_options: set_variable failed: st=0x%lx\n",
+			(unsigned long)st);
+		kfree(buf);
+		return;
+	}
+
+	pr_info("hidden_bios_options: enabled hidden BIOS options\n");
+
+	kfree(buf);
+}
+
+static const u8 uw_romid_PH4PxX[14] = {0x0C, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+static const u8 uw_romid_PH6PxX[14] = {0x0C, 0x01, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+static const struct dmi_system_id uw_sku_romid_table[] = {
+	// IBPG8 mk1
+	// Logic: If product serial matches 16inch use that, else default to 14inch
+	{
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_SKU, "IBP1XI08MK1"),
+			DMI_MATCH(DMI_PRODUCT_SERIAL, "PH6PRX"),
+		},
+		.driver_data = (void *)&uw_romid_PH6PxX
+	},
+	{
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_SKU, "IBP1XI08MK1"),
+		},
+		.driver_data = (void *)&uw_romid_PH4PxX
+	},
+	// IBP16G8 mk2
+	{
+		.matches = {
+			DMI_MATCH(DMI_PRODUCT_SKU, "IBP1XI08MK2"),
+			DMI_MATCH(DMI_PRODUCT_SERIAL, "PH6"),
+		},
+		.driver_data = (void *)&uw_romid_PH6PxX
+	},
+	{}
+};
+
+static int set_rom_id(void) {
+	int i, ret;
+	const struct dmi_system_id *uw_sku_romid;
+	const u8 *romid;
+	u8 data;
+	bool romid_false = false;
+
+	uw_sku_romid = dmi_first_match(uw_sku_romid_table);
+	if (!uw_sku_romid)
+		return 0;
+
+	romid = (const u8 *)uw_sku_romid->driver_data;
+	pr_debug("ROMID 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
+		 romid[0], romid[1], romid[2], romid[3], romid[4], romid[5], romid[6], romid[7],
+		 romid[8], romid[9], romid[10], romid[11], romid[12], romid[13]);
+
+	for (i = 0; i < 14; ++i) {
+		ret = uniwill_read_ec_ram_with_retry(UW_EC_REG_ROMID_START + i, &data, 3);
+		if (ret) {
+			pr_debug("uniwill_read_ec_ram_with_retry(...) failed.\n");
+			return ret;
+		}
+		pr_debug("ROMID index: %d, expected value: 0x%02X, actual value: 0x%02X\n", i, romid[i], data);
+		if (data != romid[i]) {
+			pr_debug("ROMID is false. Correcting...\n");
+			romid_false = true;
+			break;
+		}
+	}
+
+	if (romid_false) {
+		ret = uniwill_write_ec_ram_with_retry(UW_EC_REG_ROMID_SPECIAL_1, 0xA5, 3);
+		if (ret) {
+			pr_debug("uniwill_write_ec_ram_with_retry(...) failed.\n");
+			return ret;
+		}
+		ret = uniwill_write_ec_ram_with_retry(UW_EC_REG_ROMID_SPECIAL_2, 0x78, 3);
+		if (ret) {
+			pr_debug("uniwill_write_ec_ram_with_retry(...) failed.\n");
+			return ret;
+		}
+		for (i = 0; i < 14; ++i) {
+			ret = uniwill_write_ec_ram_with_retry(UW_EC_REG_ROMID_START + i, romid[i], 3);
+			if (ret) {
+				pr_debug("uniwill_write_ec_ram_with_retry(...) failed.\n");
+				return ret;
+			}
+		}
+	}
+	else
+		pr_debug("ROMID is correct.\n");
+
+	return 0;
+}
+
+static int has_universal_ec_fan_control(void) {
+	int ret;
+	u8 data;
+
+	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
+
+	bool universal_fan_control_exception = false
+		// For some reason, on this particular device, the 2nd fan is not controlled via the
+		// "GPU" fan curve when the bit to separate both fancurves is set, but the old fan
+		// control works just fine.
+		|| uw_feats->model == UW_MODEL_PH4TRX
+		// For some devices the "universal fan control" doesn't work for turning the fans
+		// off reliably, however, the old fan control works.
+		|| dmi_match(DMI_BOARD_NAME, "GXxMRXx")
+		|| dmi_match(DMI_BOARD_NAME, "XxAR4NAx")
+		|| dmi_match(DMI_BOARD_NAME, "X6FR5xxY")
+		|| dmi_match(DMI_BOARD_NAME, "X5AR45xS")
+	;
+
+	if (universal_fan_control_exception) {
+		return 0;
+	}
+
+	ret = uniwill_read_ec_ram(0x078e, &data);
+	if (ret < 0) {
+		return ret;
+	}
+	return (data >> 6) & 1;
+}
+
+static int has_double_pl4(bool *status)
+{
+	u8 data;
+	int result;
+
+	result = uniwill_read_ec_ram(0x0727, &data);
+	if (result)
+		return result;
+
+	if (data & (1 << 7))
+		*status = true;
+	else
+		*status = false;
+
+	return 0;
+}
+
 struct uniwill_device_features_t *uniwill_get_device_features(void)
 {
 	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
 	u32 status;
+	int result;
 	bool feats_loaded;
 
 	if (uw_feats_loaded)
@@ -1204,6 +1717,12 @@ struct uniwill_device_features_t *uniwill_get_device_features(void)
 		|| dmi_match(DMI_BOARD_NAME, "POLARIS1701A2060")
 		|| dmi_match(DMI_BOARD_NAME, "POLARIS1701I1650TI")
 		|| dmi_match(DMI_BOARD_NAME, "POLARIS1701I2060")
+		|| dmi_match(DMI_BOARD_NAME, "GXxMRXx")
+		|| dmi_match(DMI_BOARD_NAME, "GXxHRXx")
+		|| dmi_match(DMI_BOARD_NAME, "XxHP4NAx")
+		|| dmi_match(DMI_BOARD_NAME, "XxKK4NAx_XxSP4NAx")
+		|| dmi_match(DMI_BOARD_NAME, "XxAR4NAx")
+
 		// Note: XMG Fusion removed for now, seem to have
 		// neither same power profile control nor TDP set
 		//|| dmi_match(DMI_BOARD_NAME, "LAPQC71A")
@@ -1225,6 +1744,29 @@ struct uniwill_device_features_t *uniwill_get_device_features(void)
 #endif
 	;
 
+	uw_feats->uniwill_custom_profile_mode_needed = false
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0)
+		|| dmi_match(DMI_PRODUCT_SKU, "STELLARIS16I06")
+		|| dmi_match(DMI_PRODUCT_SKU, "STELLARIS17I06")
+		|| dmi_match(DMI_PRODUCT_SKU, "STELLARIS16I07")
+		|| dmi_match(DMI_PRODUCT_SKU, "STELLARIS16A07")
+		|| dmi_match(DMI_PRODUCT_SKU, "STELLSL15I06")
+		|| dmi_match(DMI_PRODUCT_SKU, "STELLSL15A06")
+		|| dmi_match(DMI_BOARD_NAME, "GXxMRXx")
+		|| dmi_match(DMI_BOARD_NAME, "GXxHRXx")
+		|| dmi_match(DMI_BOARD_NAME, "XxHP4NAx")
+		|| dmi_match(DMI_BOARD_NAME, "XxKK4NAx_XxSP4NAx")
+		|| dmi_match(DMI_BOARD_NAME, "X5KK45xS_X5SP45xS")
+		|| dmi_match(DMI_BOARD_NAME, "X6KK45xU_X6SP45xU")
+		|| dmi_match(DMI_BOARD_NAME, "X6AR55xU")
+		|| dmi_match(DMI_BOARD_NAME, "X5AR45xS")
+#endif
+	;
+
+
+	if (has_double_pl4(&uw_feats->uniwill_has_double_pl4) != 0)
+		feats_loaded = false;
+
 	uw_feats->uniwill_profile_v1 =
 		uw_feats->uniwill_profile_v1_two_profs ||
 		uw_feats->uniwill_profile_v1_three_profs;
@@ -1233,6 +1775,22 @@ struct uniwill_device_features_t *uniwill_get_device_features(void)
 		feats_loaded = false;
 	if (uw_has_charging_profile(&uw_feats->uniwill_has_charging_profile) != 0)
 		feats_loaded = false;
+	if (uw_has_ac_auto_boot(&uw_feats->uniwill_has_ac_auto_boot) != 0)
+		feats_loaded = false;
+	if (uw_has_usb_powershare(&uw_feats->uniwill_has_usb_powershare) != 0)
+		feats_loaded = false;
+	if (uw_has_mini_led_local_dimming(&uw_feats->uniwill_has_mini_led_local_dimming) != 0)
+		feats_loaded = false;
+	if (uw_has_hidden_bios_options(&uw_feats->uniwill_has_hidden_bios_options) != 0)
+		feats_loaded = false;
+
+	result = has_universal_ec_fan_control();
+	if (result < 0) {
+		feats_loaded = false;
+	} else {
+		uw_feats->uniwill_has_universal_ec_fan_control = (result == 1);
+	}
+
 
 	if (feats_loaded)
 		pr_debug("feats loaded\n");
@@ -1245,13 +1803,369 @@ struct uniwill_device_features_t *uniwill_get_device_features(void)
 }
 EXPORT_SYMBOL(uniwill_get_device_features);
 
+// Fn lock
+
+static int uniwill_wmi_fn_lock_get(int *on)
+{
+	u8 data;
+	int err;
+
+	err = uniwill_read_ec_ram(UW_EC_REG_KBD_FN_LOCK_STATUS_BIT, &data);
+	if (err)
+		return err;
+
+	if (on)
+		*on = (data & UNIWILL_FN_LOCK_MASK) >> 4;
+
+	return 0;
+}
+
+static int uniwill_wmi_fn_lock_set(int on)
+{
+	u8 data;
+	int err;
+
+	// possible race condition
+	err = uniwill_read_ec_ram(UW_EC_REG_KBD_FN_LOCK_STATUS_BIT, &data);
+	if (err)
+		return err;
+
+	if (on)
+		data = data | UNIWILL_FN_LOCK_MASK;
+	else
+		data = data & ~UNIWILL_FN_LOCK_MASK;
+
+	err = uniwill_write_ec_ram(UW_EC_REG_KBD_FN_LOCK_STATUS_BIT, data);
+	if (err)
+		return err;
+
+	return 0;
+}
+
+static ssize_t uniwill_fn_lock_show(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+{
+	int err, on;
+
+	err = uniwill_wmi_fn_lock_get(&on);
+	if (err)
+		return err;
+
+	return sprintf(buf, "%d\n", on);
+}
+
+static ssize_t uniwill_fn_lock_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t size)
+{
+	int on, err;
+
+	if (kstrtoint(buf, 10, &on) ||
+			on < 0 || on > 1)
+		return -EINVAL;
+
+	err = uniwill_wmi_fn_lock_set(on);
+	if (err)
+		return err;
+
+	return size;
+}
+
+static bool uniwill_fn_lock_available(void){
+	int err, on;
+
+	// Fn lock does not work for XMG Fusion
+	// exclude all versions
+	if (dmi_match(DMI_BOARD_NAME, "LAPQC71A")
+	    || dmi_match(DMI_BOARD_NAME, "LAPQC71B")
+	    || dmi_match(DMI_PRODUCT_NAME, "A60 MUV")) {
+		return 0;
+	}
+
+	// do a read for test (this may not produce an error)
+	err = uniwill_wmi_fn_lock_get(&on);
+	if (err)
+		return 0;
+	else
+		return 1;
+}
+
+static u8 direct_fan_control_current_value_fan0 = 0;
+static u8 direct_fan_control_current_value_fan1 = 0;
+static u8 direct_fan_control_current_value_fan0_suspend_save = 0;
+static u8 direct_fan_control_current_value_fan1_suspend_save = 0;
+static bool fans_initialized = false;
+static bool direct_fan_control_started = false;
+static bool direct_fan_control_suspend = false;
+static void restart_direct_fan_control_work_handler(struct work_struct *work);
+static DECLARE_DELAYED_WORK(direct_fan_control_restart_delayed_work, restart_direct_fan_control_work_handler);
+
+int set_full_fan_mode(bool enable) {
+	u8 mode_data;
+
+	uniwill_read_ec_ram(0x0751, &mode_data);
+
+	if (enable && !(mode_data & 0x40)) {
+		// If not "full fan mode" (i.e. 0x40 bit not set) switch to it (required for old fancontrol)
+		return uniwill_write_ec_ram(0x0751, mode_data | 0x40);
+	}
+	else if (mode_data & 0x40){
+		// If "full fan mode" (i.e. 0x40 bit set) turn it off (required for new fancontrol)
+		return uniwill_write_ec_ram(0x0751, mode_data & ~0x40);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(set_full_fan_mode);
+
+int uw_init_fan(void) {
+	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
+	int i, temp_offset;
+
+	u16 addr_use_custom_fan_table_0 = 0x07c5; // use different tables for both fans (0x0f00-0x0f2f and 0x0f30-0x0f5f respectivly)
+	u16 addr_use_custom_fan_table_1 = 0x07c6; // enable 0x0fxx fantables
+	u8 offset_use_custom_fan_table_0 = 7;
+	u8 offset_use_custom_fan_table_1 = 2;
+	u8 value_use_custom_fan_table_0;
+	u8 value_use_custom_fan_table_1;
+	u16 addr_cpu_custom_fan_table_end_temp = 0x0f00;
+	u16 addr_cpu_custom_fan_table_start_temp = 0x0f10;
+	u16 addr_cpu_custom_fan_table_fan_speed = 0x0f20;
+	u16 addr_gpu_custom_fan_table_end_temp = 0x0f30;
+	u16 addr_gpu_custom_fan_table_start_temp = 0x0f40;
+	u16 addr_gpu_custom_fan_table_fan_speed = 0x0f50;
+
+	if (!fans_initialized && uw_feats->uniwill_has_universal_ec_fan_control) {
+		set_full_fan_mode(false);
+
+		uniwill_read_ec_ram(addr_use_custom_fan_table_0, &value_use_custom_fan_table_0);
+		if (!((value_use_custom_fan_table_0 >> offset_use_custom_fan_table_0) & 1)) {
+			uniwill_write_ec_ram_with_retry(addr_use_custom_fan_table_0, value_use_custom_fan_table_0 + (1 << offset_use_custom_fan_table_0), 3);
+		}
+
+		// Setup
+		// - one controllable zone 0-115 deg
+		// - rest 116-117, 117-118 etc single non reachable dummy zones
+		//   with increasing ranges and max fan (same or increasing)
+		uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_end_temp, 115, 3);
+		uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_start_temp, 0, 3);
+		uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_fan_speed, 0x01, 3);
+		uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_end_temp, 120, 3);
+		uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_start_temp, 0, 3);
+		uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_fan_speed, 0x01, 3);
+		temp_offset = 115;
+		for (i = 0x1; i <= 0xf; ++i) {
+			uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_end_temp + i, temp_offset + i + 1, 3);
+			uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_start_temp + i, temp_offset + i, 3);
+			uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_fan_speed + i, 0xc8, 3);
+			uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_end_temp + i, temp_offset + i + 1, 3);
+			uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_start_temp + i, temp_offset + i, 3);
+			uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_fan_speed + i, 0xc8, 3);
+		}
+
+		uniwill_read_ec_ram(addr_use_custom_fan_table_1, &value_use_custom_fan_table_1);
+		if (!((value_use_custom_fan_table_1 >> offset_use_custom_fan_table_1) & 1)) {
+			uniwill_write_ec_ram_with_retry(addr_use_custom_fan_table_1, value_use_custom_fan_table_1 + (1 << offset_use_custom_fan_table_1), 3);
+		}
+	}
+
+	fans_initialized = true;
+
+	return 0;
+}
+EXPORT_SYMBOL(uw_init_fan);
+
+static void restart_direct_fan_control_work_handler(struct work_struct *work)
+{
+	int i;
+	u16 addr_fan0 = 0x1804;
+	u16 addr_fan1 = 0x1809;
+
+	pr_debug("restart fan control\n");
+
+	set_full_fan_mode(false);
+	msleep(10);
+	set_full_fan_mode(true);
+
+	// Attempt to write both fans as quick as possible before complete ramp-up
+	pr_debug("prevent ramp-up start\n");
+	for (i = 0; i < 10; ++i) {
+		uniwill_write_ec_ram(addr_fan0, direct_fan_control_current_value_fan0 & 0xff);
+		uniwill_write_ec_ram(addr_fan1, direct_fan_control_current_value_fan1 & 0xff);
+		msleep(10);
+	}
+	pr_debug("prevent ramp-up done\n");
+
+	schedule_delayed_work(&direct_fan_control_restart_delayed_work, msecs_to_jiffies(50 * 60 * 1000));
+}
+
+static int direct_fan_control(u32 fan_index, u8 fan_speed, bool prevent_rampup)
+{
+	u16 addr_for_fan;
+	u16 addr_fan0 = 0x1804;
+	u16 addr_fan1 = 0x1809;
+
+	if (fan_index == 0) {
+		addr_for_fan = addr_fan0;
+		direct_fan_control_current_value_fan0 = fan_speed;
+	} else if (fan_index == 1) {
+		addr_for_fan = addr_fan1;
+		direct_fan_control_current_value_fan1 = fan_speed;
+	} else {
+		return -EINVAL;
+	}
+
+	if (prevent_rampup && !direct_fan_control_started) {
+		direct_fan_control_started = true;
+		schedule_delayed_work(&direct_fan_control_restart_delayed_work, 0);
+	} else {
+		uniwill_write_ec_ram(addr_for_fan, fan_speed & 0xff);
+	}
+
+	return 0;
+}
+
+u32 uw_set_fan(u32 fan_index, u8 fan_speed)
+{
+	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
+	u16 addr_for_fan;
+
+	u16 addr_cpu_custom_fan_table_fan_speed = 0x0f20;
+	u16 addr_gpu_custom_fan_table_fan_speed = 0x0f50;
+
+	u8 byte_data;
+
+	if (uw_feats->uniwill_has_universal_ec_fan_control) {
+		uniwill_read_ec_ram(0x0751, &byte_data);
+		if (!(byte_data & 0x40)) {
+			uw_init_fan();
+
+			if (fan_index == 0)
+				addr_for_fan = addr_cpu_custom_fan_table_fan_speed;
+			else if (fan_index == 1)
+				addr_for_fan = addr_gpu_custom_fan_table_fan_speed;
+			else
+				return -EINVAL;
+
+			if (fan_speed > NB02_FAN_SPEED_MAX)
+				return -EINVAL;
+
+			// Don't allow vallues between fan-off and minimum fan-on-speed
+			if (fan_speed < FAN_ON_MIN_SPEED_PERCENT * NB02_FAN_SPEED_MAX / 2 / 100)
+				fan_speed = 0;
+			else if (fan_speed < FAN_ON_MIN_SPEED_PERCENT * NB02_FAN_SPEED_MAX / 100)
+				fan_speed = FAN_ON_MIN_SPEED_PERCENT * NB02_FAN_SPEED_MAX / 100;
+
+			if (fan_speed == 0) {
+				// Avoid hard coded EC behaviour: Setting fan speed = 0x00 spins the fan up
+				// to 0x3c (30%) for 3 minutes before going to 0x00. Setting fan speed = 1
+				// also causes the fan to stop since on 2020 or later TF devices the
+				// microcontroller in the fan itself is intelligent enough to not try to
+				// start up the motor when the speed is to slow. Older devices don't use
+				// this fan controll anyway, but the else case below.
+				fan_speed = 1;
+			}
+
+			uniwill_write_ec_ram(addr_for_fan, fan_speed & 0xff);
+
+			direct_fan_control(fan_index, fan_speed, false);
+		}
+	}
+	else { // old workaround using full fan mode
+		direct_fan_control(fan_index, fan_speed, true);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(uw_set_fan);
+
+u32 uw_set_fan_auto(void)
+{
+	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
+	u8 mode_data;
+
+	if (uw_feats->uniwill_has_universal_ec_fan_control) {
+		u16 addr_use_custom_fan_table_0 = 0x07c5; // use different tables for both fans (0x0f00-0x0f2f and 0x0f30-0x0f5f respectivly)
+		u16 addr_use_custom_fan_table_1 = 0x07c6; // enable 0x0fxx fantables
+		u8 offset_use_custom_fan_table_0 = 7;
+		u8 offset_use_custom_fan_table_1 = 2;
+		u8 value_use_custom_fan_table_0;
+		u8 value_use_custom_fan_table_1;
+		uniwill_read_ec_ram(addr_use_custom_fan_table_1, &value_use_custom_fan_table_1);
+		if ((value_use_custom_fan_table_1 >> offset_use_custom_fan_table_1) & 1) {
+			uniwill_write_ec_ram_with_retry(addr_use_custom_fan_table_1, value_use_custom_fan_table_1 - (1 << offset_use_custom_fan_table_1), 3);
+		}
+		uniwill_read_ec_ram(addr_use_custom_fan_table_0, &value_use_custom_fan_table_0);
+		if ((value_use_custom_fan_table_0 >> offset_use_custom_fan_table_0) & 1) {
+			uniwill_write_ec_ram_with_retry(addr_use_custom_fan_table_0, value_use_custom_fan_table_0 - (1 << offset_use_custom_fan_table_0), 3);
+		}
+		fans_initialized = false;
+	}
+	else {
+		cancel_delayed_work_sync(&direct_fan_control_restart_delayed_work);
+		direct_fan_control_started = false;
+		// Get current mode
+		uniwill_read_ec_ram(0x0751, &mode_data);
+		// Switch off "full fan mode" (i.e. unset 0x40 bit)
+		uniwill_write_ec_ram(0x0751, mode_data & 0xbf);
+	}
+
+	direct_fan_control_current_value_fan0 = 0;
+	direct_fan_control_current_value_fan1 = 0;
+
+	return 0;
+}
+EXPORT_SYMBOL(uw_set_fan_auto);
+
+static u8 uniwill_touchp_toggle_seq[] = {
+	0xe0, 0x5b, // Super down
+	0x1d,       // Control down
+	0x76,       // Zenkaku/Hankaku down
+	0xf6,       // Zenkaku/Hankaku up
+	0x9d,       // Control up
+	0xe0, 0xdb  // Super up
+};
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
+static bool uniwill_i8042_filter(unsigned char data, unsigned char str,
+				 struct serio *port __always_unused)
+#else
+static bool uniwill_i8042_filter(unsigned char data, unsigned char str,
+				 struct serio *port __always_unused,
+				 void *context __always_unused)
+#endif
+{
+	static u8 seq_pos;
+
+	if (unlikely(str & I8042_STR_AUXDATA))
+		return false;
+
+	if (unlikely(data == uniwill_touchp_toggle_seq[seq_pos])) {
+		++seq_pos;
+		if (unlikely(data == 0x76 || data == 0xf6))
+			return true;
+		else if (unlikely(seq_pos == ARRAY_SIZE(uniwill_touchp_toggle_seq))) {
+			schedule_work(&uniwill_key_event_work);
+			seq_pos = 0;
+		}
+		return false;
+	}
+
+	seq_pos = 0;
+	return false;
+}
+
 static int uniwill_keyboard_probe(struct platform_device *dev)
 {
 	u32 i;
 	u8 data;
 	int status;
+	struct uniwill_device_features_t *uw_feats;
 
-	struct uniwill_device_features_t *uw_feats = uniwill_get_device_features();
+	set_rom_id();
+
+	uw_feats = uniwill_get_device_features();
 
 	// FIXME Hard set balanced profile until we have implemented a way to
 	// switch it while tuxedo_io is loaded
@@ -1266,12 +2180,10 @@ static int uniwill_keyboard_probe(struct platform_device *dev)
 			uniwill_write_ec_ram(0x0743 + i, data);
 		}
 	}
-	else {
-		// Activate NVIDIA Dynamic Boost
-		uniwill_write_ec_ram(0x0746, 0x19);
-		uniwill_write_ec_ram(0x0745, 0x23);
-		uniwill_write_ec_ram(0x0743, 0x03);
-	}
+
+	// Make sure custom TDP/custom fan curve mode is set. Using the
+	// custom profile mode flag to ID this set of devices.
+	uniwill_set_custom_profile_mode(true);
 
 	// Enable manual mode
 	uniwill_write_ec_ram(0x0741, 0x01);
@@ -1279,15 +2191,34 @@ static int uniwill_keyboard_probe(struct platform_device *dev)
 	// Zero second fan temp for detection
 	uniwill_write_ec_ram(0x044f, 0x00);
 
-	status = register_keyboard_notifier(&keyboard_notifier_block);
-
-	uw_kbd_bl_init(dev);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
+	TUXEDO_ERROR("Warning: Kernel version less that 5.9, keyboard backlight might not be properly recognized.");
+#endif
+	uniwill_read_ec_ram(UW_EC_REG_KBD_BL_STATUS, &data);
+	uniwill_kbd_bl_enable_state_on_start = (data >> 1) & 0x01;
+	uniwill_leds_init(dev);
+	uniwill_write_kbd_bl_enable(1);
 
 	status = uw_lightbar_init(dev);
 	uw_lightbar_loaded = (status >= 0);
 
 	uw_charging_priority_init(dev);
 	uw_charging_profile_init(dev);
+	uw_ac_auto_boot_init(dev);
+	uw_usb_powershare_init(dev);
+	uw_mini_led_local_dimming_init(dev);
+	uw_show_hidden_bios_options();
+	uw_battery_init();
+
+	// Ignore return value, it just means there is already a filter active
+	// which is fine, because it is probably just the upstream patch of this
+	// filter.
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
+	if (i8042_install_filter(uniwill_i8042_filter))
+#else
+	if (i8042_install_filter(uniwill_i8042_filter, NULL))
+#endif
+		pr_info("Could not install i8042 filter.\n");
 
 	return 0;
 }
@@ -1304,24 +2235,26 @@ static void uniwill_keyboard_remove(struct platform_device *dev)
 	if (uw_charging_profile_loaded)
 		sysfs_remove_group(&dev->dev.kobj, &uw_charging_profile_attr_group);
 
-	if (uniwill_kbd_bl_type_rgb_single_color) {
-		sysfs_remove_group(&dev->dev.kobj, &uw_kbd_bl_color_attr_group);
-	}
+	uw_battery_uninit();
+
+	uniwill_leds_remove(dev);
 
 	// Restore previous backlight enable state
 	if (uniwill_kbd_bl_enable_state_on_start != 0xff) {
 		uniwill_write_kbd_bl_enable(uniwill_kbd_bl_enable_state_on_start);
 	}
 
-	unregister_keyboard_notifier(&keyboard_notifier_block);
-
-	uniwill_timer_delete(&uw_kbd_bl_init_timer);
-
 	if (uw_lightbar_loaded)
 		uw_lightbar_remove(dev);
 
 	// Disable manual mode
 	uniwill_write_ec_ram(0x0741, 0x00);
+
+	// Ignore return value, it just means this filter was not active atm.
+	if (i8042_remove_filter(uniwill_i8042_filter))
+		pr_info("Could not remove i8042 filter.\n");
+
+	cancel_delayed_work_sync(&direct_fan_control_restart_delayed_work);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 	return 0;
@@ -1330,18 +2263,47 @@ static void uniwill_keyboard_remove(struct platform_device *dev)
 
 static int uniwill_keyboard_suspend(struct platform_device *dev, pm_message_t state)
 {
+	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
+	u8 data;
+	if (uw_feats->uniwill_custom_profile_mode_needed) {
+		// Unset "customer mode light" before suspend. Otherwise at
+		// least one device is known to immediately wake up.
+		uniwill_read_ec_ram(0x0727, &data);
+		data &= ~(1 << 6);
+		uniwill_write_ec_ram(0x0727, data);
+	}
 	uniwill_write_kbd_bl_enable(0);
+	if (direct_fan_control_started) {
+		direct_fan_control_suspend = true;
+		direct_fan_control_current_value_fan0_suspend_save = direct_fan_control_current_value_fan0;
+		direct_fan_control_current_value_fan1_suspend_save = direct_fan_control_current_value_fan1;
+		uw_set_fan_auto();
+	}
 	return 0;
 }
 
 static int uniwill_keyboard_resume(struct platform_device *dev)
 {
-	if (uniwill_kbd_bl_type_rgb_single_color) {
-		uniwill_write_kbd_bl_reset();
-		msleep(100);
-		uniwill_write_kbd_bl_state();
+	struct uniwill_device_features_t *uw_feats = &uniwill_device_features;
+	u8 data;
+
+	if (direct_fan_control_suspend) {
+		direct_fan_control_suspend = false;
+		uw_set_fan(0, direct_fan_control_current_value_fan0_suspend_save);
+		uw_set_fan(1, direct_fan_control_current_value_fan1_suspend_save);
 	}
+
+	if (uw_feats->uniwill_custom_profile_mode_needed) {
+		// Re-set "customer mode light" on resume
+		uniwill_read_ec_ram(0x0727, &data);
+		data |= (1 << 6);
+		uniwill_write_ec_ram(0x0727, data);
+	}
+	uniwill_leds_restore_state_extern();
 	uniwill_write_kbd_bl_enable(1);
+	// Restore charging settings on resume
+	uw_charging_priority_write_state();
+	uw_charging_profile_write_state();
 	return 0;
 }
 
@@ -1360,4 +2322,9 @@ struct tuxedo_keyboard_driver uniwill_keyboard_driver = {
 	.platform_driver = &platform_driver_uniwill,
 	.probe = uniwill_keyboard_probe,
 	.key_map = uniwill_wmi_keymap,
+	.fn_lock_available = uniwill_fn_lock_available,
+	.fn_lock_show = uniwill_fn_lock_show,
+	.fn_lock_store = uniwill_fn_lock_store,
 };
+
+#endif // UNIWILL_KEYBOARD_H

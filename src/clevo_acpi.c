@@ -1,27 +1,28 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*!
  * Copyright (c) 2020 TUXEDO Computers GmbH <tux@tuxedocomputers.com>
  *
- * This file is part of tuxedo-keyboard.
+ * This file is part of tuxedo-drivers.
  *
- * tuxedo-keyboard is free software: you can redistribute it and/or modify
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * This software is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this software.  If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see <https://www.gnu.org/licenses/>.
  */
+
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/acpi.h>
 #include <linux/version.h>
-#include <linux/string.h>
 #include "clevo_interfaces.h"
 
 #define DRIVER_NAME			"clevo_acpi"
@@ -33,14 +34,21 @@ struct clevo_acpi_driver_data_t {
 
 static struct clevo_acpi_driver_data_t *active_driver_data = NULL;
 
-static u32 clevo_acpi_evaluate(struct acpi_device *device, u8 cmd, union acpi_object arg, union acpi_object **result)
+static int clevo_acpi_evaluate(struct acpi_device *device, u8 cmd, u32 arg, union acpi_object **result)
 {
-	u32 status;
+	int status;
 	acpi_handle handle;
 	u64 dsm_rev_dummy = 0x00; // Dummy 0 value since not used
 	u64 dsm_func = cmd;
+	union acpi_object *out_obj;
+	guid_t clevo_acpi_dsm_uuid;
+
+	// Integer package data for argument
 	union acpi_object dsm_argv4_package_data[] = {
-		arg
+		{
+			.integer.type = ACPI_TYPE_INTEGER,
+			.integer.value = arg
+		}
 	};
 
 	// Package argument
@@ -48,6 +56,49 @@ static u32 clevo_acpi_evaluate(struct acpi_device *device, u8 cmd, union acpi_ob
 		.package.type = ACPI_TYPE_PACKAGE,
 		.package.count = 1,
 		.package.elements = dsm_argv4_package_data
+	};
+
+	status = guid_parse(CLEVO_ACPI_DSM_UUID, &clevo_acpi_dsm_uuid);
+	if (status < 0)
+		return -ENOENT;
+
+	handle = acpi_device_handle(device);
+	if (handle == NULL)
+		return -ENODEV;
+
+	out_obj = acpi_evaluate_dsm(handle, &clevo_acpi_dsm_uuid, dsm_rev_dummy, dsm_func, &dsm_argv4);
+	if (!out_obj) {
+		pr_err("failed to evaluate _DSM\n");
+		status = -1;
+	}
+	else {
+		if (!IS_ERR_OR_NULL(result)) {
+			*result = out_obj;
+		}
+	}
+
+	return status;
+}
+
+static int clevo_acpi_evaluate_pkgbuf(struct acpi_device *device, u8 cmd, u8 *arg, u32 length, union acpi_object **result)
+{
+	int status;
+	acpi_handle handle;
+	u64 dsm_rev_dummy = 0x00; // Dummy 0 value since not used
+	u64 dsm_func = cmd;
+
+	// Use a buffer inside a package
+	union acpi_object args = {
+		.buffer.type = ACPI_TYPE_BUFFER,
+		.buffer.length = length,
+		.buffer.pointer = arg,
+	};
+
+	// Package argument
+	union acpi_object dsm_argv4 = {
+		.package.type = ACPI_TYPE_PACKAGE,
+		.package.count = 1,
+		.package.elements = &args,
 	};
 
 	union acpi_object *out_obj;
@@ -66,89 +117,41 @@ static u32 clevo_acpi_evaluate(struct acpi_device *device, u8 cmd, union acpi_ob
 	if (!out_obj) {
 		pr_err("failed to evaluate _DSM\n");
 		status = -1;
-	} else {
+	}
+	else {
 		if (!IS_ERR_OR_NULL(result)) {
 			*result = out_obj;
 		}
-		/*
-		if (out_obj->type == ACPI_TYPE_INTEGER) {
-			if (!IS_ERR_OR_NULL(result))
-				*result = (u32) out_obj->integer.value;
-				// pr_debug("evaluate _DSM cmd: %0#4x arg: %0#10x\n", cmd, arg);
-		} else {
-			pr_err("unknown output from _DSM\n");
-			status = -ENODATA;
-		}
-		*/
 	}
-
-	// Previously we did this step for the caller, but it is now the
-	// caller's responsibility to free this.
-	//ACPI_FREE(out_obj);
 
 	return status;
 }
 
-u32 clevo_acpi_interface_method_call(u8 cmd, u32 arg, u32 *result_value)
+static int clevo_acpi_interface_method_call(u8 cmd, u32 arg, union acpi_object **result_value)
 {
-	u32 status = 0;
+	int status = 0;
 
 	if (!IS_ERR_OR_NULL(active_driver_data)) {
-		// Integer package data for argument
-		union acpi_object acpi_arg = {
-			.integer.type = ACPI_TYPE_INTEGER,
-			.integer.value = arg
-		};
-		union acpi_object *result_obj = NULL;
-		status = clevo_acpi_evaluate(active_driver_data->adev, cmd, acpi_arg, &result_obj);
-		if (!IS_ERR_OR_NULL(result_obj)) {
-			if (result_obj->type == ACPI_TYPE_INTEGER) {
-				if (!IS_ERR_OR_NULL(result_value)) {
-					*result_value = result_obj->integer.value;
-				}
-			} else {
-				pr_err("acpi method call exec, call returned non-integer\n");
-				status = -ENODATA;
-			}
-			ACPI_FREE(result_obj);
-		} else {
-			pr_err("acpi method call exec, call returned null or error\n");
-			status = -ENODATA;
-		}
+		status = clevo_acpi_evaluate(active_driver_data->adev, cmd, arg, result_value);
 	} else {
 		pr_err("acpi method call exec, no driver data found\n");
-		pr_err("..for method_call: %0#4x, integer arg: %0#10x\n", cmd, arg);
+		pr_err("..for method_call: %0#4x arg: %0#10x\n", cmd, arg);
 		status = -ENODATA;
 	}
+	// pr_debug("clevo_acpi method_call: %0#4x arg: %0#10x result: %0#10x\n", cmd, arg, !IS_ERR_OR_NULL(result_value) ? *result_value : 0);
 
 	return status;
 }
 
-u32 clevo_acpi_interface_buffer_method_call(u8 cmd, u8 *buf, u32 buf_length)
+static int clevo_acpi_interface_method_call_pkgbuf(u8 cmd, u8 *arg, u32 length, union acpi_object **result_value)
 {
-	u32 status = 0;
+	int status = 0;
 
 	if (!IS_ERR_OR_NULL(active_driver_data)) {
-		union acpi_object arg = {
-			.buffer.type = ACPI_TYPE_BUFFER,
-			.buffer.length = buf_length,
-			.buffer.pointer = buf
-		};
-		union acpi_object *result_obj = NULL;
-		status = clevo_acpi_evaluate(active_driver_data->adev, cmd, arg, &result_obj);
-		if (!IS_ERR_OR_NULL(result_obj)) {
-			if (result_obj->type != ACPI_TYPE_BUFFER) {
-				pr_err("acpi method call exec, call returned non-array\n");
-				status = -ENODATA;
-			} // else, gauntlet is passed and status = 0
-			ACPI_FREE(result_obj);
-		} else {
-			pr_err("acpi method call exec, call returned null or error\n");
-			status = -ENODATA;
-		}
+		status = clevo_acpi_evaluate_pkgbuf(active_driver_data->adev, cmd, arg, length, result_value);
 	} else {
 		pr_err("acpi method call exec, no driver data found\n");
-		pr_err("..for method_call: %0#4x, buffer arg", cmd);
+		pr_err("..for method_call: %0#2x\n", cmd);
 		status = -ENODATA;
 	}
 
@@ -158,7 +161,7 @@ u32 clevo_acpi_interface_buffer_method_call(u8 cmd, u8 *buf, u32 buf_length)
 struct clevo_interface_t clevo_acpi_interface = {
 	.string_id = CLEVO_INTERFACE_ACPI_STRID,
 	.method_call = clevo_acpi_interface_method_call,
-	.buffer_method_call = clevo_acpi_interface_buffer_method_call
+	.method_call_pkgbuf = clevo_acpi_interface_method_call_pkgbuf,
 };
 
 static int clevo_acpi_add(struct acpi_device *device)
@@ -198,23 +201,23 @@ static void clevo_acpi_remove(struct acpi_device *device)
 #endif
 }
 
-void clevo_acpi_notify(struct acpi_device *device, u32 event)
+static void clevo_acpi_notify(struct acpi_device *device, u32 event)
 {
-	union acpi_object *event_value = NULL;
+	u32 event_value;
+	union acpi_object *out_obj;
+	int status;
 	// struct clevo_acpi_driver_data_t *clevo_acpi_driver_data;
 
-	union acpi_object arg = {
-		.integer.type = ACPI_TYPE_INTEGER,
-		.integer.value = 0
-	};
-	clevo_acpi_evaluate(device, 0x01, arg, &event_value);
-	if (!IS_ERR_OR_NULL(event_value)) {
-		if (event_value->type == ACPI_TYPE_INTEGER) {
-			u32 event_value_int = (u32)(event_value->integer.value);
-			pr_debug("clevo_acpi event: %0#6x, clevo event value: %0#6x\n", event, event_value_int);
-		}
-		ACPI_FREE(event_value);
+	status = clevo_acpi_evaluate(device, 0x01, 0, &out_obj);
+	if (!status) {
+			if (out_obj->type == ACPI_TYPE_INTEGER) {
+				event_value = (u32)out_obj->integer.value;
+			} else {
+				pr_err("return type not integer, use clevo_evaluate_method2\n");
+			}
+			ACPI_FREE(out_obj);
 	}
+	pr_debug("clevo_acpi event: %0#6x, clevo event value: %0#6x\n", event, event_value);
 
 	// clevo_acpi_driver_data = container_of(&device, struct clevo_acpi_driver_data_t, adev);
 	if (!IS_ERR_OR_NULL(clevo_acpi_interface.event_callb)) {
@@ -266,7 +269,6 @@ module_acpi_driver(clevo_acpi_driver);
 
 MODULE_AUTHOR("TUXEDO Computers GmbH <tux@tuxedocomputers.com>");
 MODULE_DESCRIPTION("Driver for Clevo ACPI interface");
-MODULE_VERSION("0.0.3");
 MODULE_LICENSE("GPL");
 
 MODULE_DEVICE_TABLE(acpi, clevo_acpi_device_ids);

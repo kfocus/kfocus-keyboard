@@ -1,27 +1,21 @@
-# Prerequisites
-*.d
-
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
-
-# Kernel Module Compile Results
-*.mod*
+# make artifacts
 *.cmd
-.tmp_versions/
+*.ko
+*.mod
+*.mod.c
+*.o
+*.o.d
 modules.order
 Module.symvers
-Mkfile.old
 
-*.mk
+# build artifacts
+/build/
+/build-alpm/
+/build-deb/
+/build-rpm/
 
-.vscode/
-*.kdev4
-
-# Packaging
-rpm
-deb/tuxedo-keyboard-*
-*.deb
-*.rpm
+# IDE artifacts
+*.kate-swp
+/*.kdev4
+/.vscode
+/.cache

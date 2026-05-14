@@ -6,12 +6,13 @@ include /usr/share/dpkg/pkg-info.mk
 	dh $@
 
 override_dh_install:
-	mv src_pkg/dkms_postinst src_pkg/postinst
-	dh_install src usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
-	dh_install Makefile usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
-	dh_install Kbuild usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
-	dh_install dkms.conf usr/src/tuxedo-keyboard-$(DEB_VERSION_UPSTREAM)/
-	mv src_pkg/postinst src_pkg/dkms_postinst
+	#mv src_pkg/dkms_postinst src_pkg/postinst
+	dh_install src usr/src/tuxedo-drivers-$(DEB_VERSION_UPSTREAM)/
+	dh_install Makefile usr/src/tuxedo-drivers-$(DEB_VERSION_UPSTREAM)/
+	dh_install Kbuild usr/src/tuxedo-drivers-$(DEB_VERSION_UPSTREAM)/
+	dh_install dkms.conf usr/src/tuxedo-drivers-$(DEB_VERSION_UPSTREAM)/
+	dh_install files/usr /
+	#mv src_pkg/postinst src_pkg/dkms_postinst
 
 # This is present in tuxedo-drivers, but is probably not required for
 # kfocus-keyboard.

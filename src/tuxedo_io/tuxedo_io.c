@@ -1,21 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*!
- * Copyright (c) 2019-2022 TUXEDO Computers GmbH <tux@tuxedocomputers.com>
+ * Copyright (c) 2019-2023 TUXEDO Computers GmbH <tux@tuxedocomputers.com>
  *
- * This file is part of tuxedo-io.
+ * This file is part of tuxedo-drivers.
  *
- * tuxedo-io is free software: you can redistribute it and/or modify
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * This software is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this software.  If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see <https://www.gnu.org/licenses/>.
  */
+
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -34,7 +36,7 @@
 
 MODULE_DESCRIPTION("Hardware interface for TUXEDO laptops");
 MODULE_AUTHOR("TUXEDO Computers GmbH <tux@tuxedocomputers.com>");
-MODULE_VERSION("0.3.2");
+MODULE_VERSION("0.3.9");
 MODULE_LICENSE("GPL");
 
 MODULE_ALIAS_CLEVO_INTERFACES();
@@ -43,16 +45,25 @@ MODULE_ALIAS("wmi:" UNIWILL_WMI_MGMT_GUID_BA);
 MODULE_ALIAS("wmi:" UNIWILL_WMI_MGMT_GUID_BB);
 MODULE_ALIAS("wmi:" UNIWILL_WMI_MGMT_GUID_BC);
 
+#define NB01_FAN_SPEED_MAX 0xff
+#define FAN_ON_MIN_SPEED_PERCENT 25
+
 // Initialized in module init, global for ioctl interface
 static u32 id_check_clevo;
 static u32 id_check_uniwill;
 
 static struct uniwill_device_features_t *uw_feats;
 
+static int uw_get_tdp_min(u8 tdp_index);
+static int uw_get_tdp_max(u8 tdp_index);
+static int uw_get_tdp(u8 tdp_index);
+static int uw_set_tdp(u8 tdp_index, int tdp_value);
+static u32 uw_set_performance_profile_v1(enum uw_perf_profiles_v1 profile);
+
 /**
  * strstr version of dmi_match
  */
-static bool dmi_string_in(enum dmi_field f, const char *str)
+static bool __attribute__ ((unused)) dmi_string_in(enum dmi_field f, const char *str)
 {
 	const char *info = dmi_get_system_info(f);
 
@@ -79,8 +90,14 @@ static int tdp_max_ph4trx[] = { 0x32, 0x32, 0x00 };
 static int tdp_min_ph4tqx[] = { 0x05, 0x05, 0x00 };
 static int tdp_max_ph4tqx[] = { 0x32, 0x32, 0x00 };
 
-static int tdp_min_ph4axx[] = { 0x05, 0x05, 0x00 };
-static int tdp_max_ph4axx[] = { 0x2d, 0x3c, 0x00 };
+static int tdp_min_phxaxx_mk1[] = { 0x05, 0x05, 0x00 };
+static int tdp_max_phxaxx_mk1[] = { 0x32, 0x3c, 0x00 };
+
+static int tdp_min_phxaxx_mk2[] = { 0x05, 0x05, 0x00 };
+static int tdp_max_phxaxx_mk2[] = { 0x37, 0x64, 0x00 };
+
+static int tdp_min_phxpxx[] = { 0x05, 0x05, 0x05 };
+static int tdp_max_phxpxx[] = { 0x2d, 0x3c, 0x6e };
 
 static int tdp_min_pfxluxg[] = { 0x05, 0x05, 0x05 };
 static int tdp_max_pfxluxg[] = { 0x23, 0x23, 0x28 };
@@ -103,10 +120,50 @@ static int tdp_max_gmxagxx[] = { 0x78, 0x78, 0xd7 };
 static int tdp_min_gmxrgxx[] = { 0x05, 0x05, 0x05 };
 static int tdp_max_gmxrgxx[] = { 0x64, 0x64, 0x6e };
 
+static int tdp_min_gmxpxxx[] = { 0x05, 0x05, 0x05 };
+static int tdp_max_gmxpxxx[] = { 0x82, 0x82, 0xc8 };
+
+static int tdp_min_gmxxgxx[] = { 0x05, 0x05, 0x05 };
+static int tdp_max_gmxxgxx[] = { 0x50, 0x50, 0x64 };
+
+static int tdp_min_gmxixxb_mb1[] = { 0x05, 0x05, 0x05 };
+static int tdp_max_gmxixxb_mb1[] = { 0xcd, 0xcd, 0x190 };
+
+static int tdp_min_gmxixxb_mb2[] = { 0x05, 0x05, 0x05 };
+static int tdp_max_gmxixxb_mb2[] = { 0xa0, 0xa0, 0xfa };
+
+static int tdp_min_gmxixxn[] = { 0x05, 0x05, 0x05 };
+static int tdp_max_gmxixxn[] = { 0xa0, 0xa0, 0xfa };
+
+static int tdp_min_gmxixxa[] = { 0x05, 0x05, 0x05 };
+static int tdp_max_gmxixxa[] = { 0x8c, 0x8c, 0xc8 };
+
+static int tdp_min_gmxhgxa[] = { 0x05, 0x05, 0x05 };
+static int tdp_max_gmxhgxa[] = { 0x5a, 0x5a, 0x64 };
+
+static int tdp_min_x6ar5xx[] = { 0x05, 0x05, 0x05 };
+static int tdp_max_x6ar5xx[] = { 0xd2, 0xd2, 0x1a4 };
+
+// Actual min TDP from NB02 CC is 10 W, but 25 W was suggested after testing.
+static int tdp_min_x6fr5xx[] = { 0x19, 0x19, 0x19 };
+static int tdp_max_x6fr5xx[] = { 0xa2, 0xa2, 0xc3 };
+
+static int tdp_min_xxxx45xs[] = { 0x0a, 0x0a, 0x0a };
+static int tdp_max_xxxx45xs[] = { 0x64, 0x64, 0x69 };
+
+static int tdp_min_x6ar55xu[] = { 0x0a, 0x0a, 0x0a };
+static int tdp_max_x6ar55xu[] = { 0x91, 0x9b, 0x122 };
+
+static int tdp_min_x5ar45xs[] = { 0x0a, 0x0a, 0x0a };
+static int tdp_max_x5ar45xs[] = { 0x5a, 0x5a, 0xe6 };
+
+static int tdp_min_x6xx45xu[] = { 0x0a, 0x0a, 0x0a };
+static int tdp_max_x6xx45xu[] = { 0x64, 0x64, 0x69 };
+
 static int *tdp_min_defs = NULL;
 static int *tdp_max_defs = NULL;
 
-void uw_id_tdp(void)
+static void uw_id_tdp(void)
 {
 	if (uw_feats->model == UW_MODEL_PH4TUX) {
 		tdp_min_defs = tdp_min_ph4tux;
@@ -117,10 +174,20 @@ void uw_id_tdp(void)
 	} else if (uw_feats->model == UW_MODEL_PH4TQF) {
 		tdp_min_defs = tdp_min_ph4tqx;
 		tdp_max_defs = tdp_max_ph4tqx;
-	} else if (uw_feats->model == UW_MODEL_PH4AQF_ARX) {
-		tdp_min_defs = tdp_min_ph4axx;
-		tdp_max_defs = tdp_max_ph4axx;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0)
+	} else if (dmi_match(DMI_PRODUCT_SKU, "IBP1XI07MK1")) {
+		tdp_min_defs = tdp_min_phxaxx_mk1;
+		tdp_max_defs = tdp_max_phxaxx_mk1;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "IBP1XI07MK2")) {
+		tdp_min_defs = tdp_min_phxaxx_mk2;
+		tdp_max_defs = tdp_max_phxaxx_mk2;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "IBP1XI08MK1") ||
+		   dmi_match(DMI_PRODUCT_SKU, "IBP1XI08MK2") ||
+		   dmi_match(DMI_PRODUCT_SKU, "IBP14I08MK2") ||
+		   dmi_match(DMI_PRODUCT_SKU, "IBP16I08MK2") ||
+		   dmi_match(DMI_PRODUCT_SKU, "OMNIA08IMK2")) {
+		tdp_min_defs = tdp_min_phxpxx;
+		tdp_max_defs = tdp_max_phxpxx;
 	} else if (dmi_match(DMI_PRODUCT_SKU, "PULSE1502")) {
 		tdp_min_defs = tdp_min_pfxluxg;
 		tdp_max_defs = tdp_max_pfxluxg;
@@ -144,6 +211,50 @@ void uw_id_tdp(void)
 	} else if (dmi_match(DMI_PRODUCT_SKU, "STEPOL1XA04")) {
 		tdp_min_defs = tdp_min_gmxrgxx;
 		tdp_max_defs = tdp_max_gmxrgxx;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "STELLARIS1XI05")) {
+		tdp_min_defs = tdp_min_gmxpxxx;
+		tdp_max_defs = tdp_max_gmxpxxx;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "POLARIS1XA05")) {
+		tdp_min_defs = tdp_min_gmxxgxx;
+		tdp_max_defs = tdp_max_gmxxgxx;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "STELLARIS1XA05")) {
+		tdp_min_defs = tdp_min_gmxxgxx;
+		tdp_max_defs = tdp_max_gmxxgxx;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "STELLARIS16I06") &&
+		   dmi_match(DMI_BOARD_NAME, "GM6IXxB_MB1")) {
+		tdp_min_defs = tdp_min_gmxixxb_mb1;
+		tdp_max_defs = tdp_max_gmxixxb_mb1;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "STELLARIS16I06") &&
+		   dmi_match(DMI_BOARD_NAME, "GM6IXxB_MB2")) {
+		tdp_min_defs = tdp_min_gmxixxb_mb2;
+		tdp_max_defs = tdp_max_gmxixxb_mb2;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "STELLARIS17I06")) {
+		tdp_min_defs = tdp_min_gmxixxn;
+		tdp_max_defs = tdp_max_gmxixxn;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "STELLSL15I06")) {
+		tdp_min_defs = tdp_min_gmxixxa;
+		tdp_max_defs = tdp_max_gmxixxa;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "STELLSL15A06")) {
+		tdp_min_defs = tdp_min_gmxhgxa;
+		tdp_max_defs = tdp_max_gmxhgxa;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "STELLARIS16I07")) {
+		tdp_min_defs = tdp_min_x6ar5xx;
+		tdp_max_defs = tdp_max_x6ar5xx;
+	} else if (dmi_match(DMI_PRODUCT_SKU, "STELLARIS16A07")) {
+		tdp_min_defs = tdp_min_x6fr5xx;
+		tdp_max_defs = tdp_max_x6fr5xx;
+	} else if (dmi_match(DMI_BOARD_NAME, "X5KK45xS_X5SP45xS")) {
+		tdp_min_defs = tdp_min_xxxx45xs;
+		tdp_max_defs = tdp_max_xxxx45xs;
+	} else if (dmi_match(DMI_BOARD_NAME, "X6AR55xU")) {
+		tdp_min_defs = tdp_min_x6ar55xu;
+		tdp_max_defs = tdp_max_x6ar55xu;
+	} else if (dmi_match(DMI_BOARD_NAME, "X5AR45xS")) {
+		tdp_min_defs = tdp_min_x5ar45xs;
+		tdp_max_defs = tdp_max_x5ar45xs;
+	} else if (dmi_match(DMI_BOARD_NAME, "X6KK45xU_X6SP45xU")) {
+		tdp_min_defs = tdp_min_x6xx45xu;
+		tdp_max_defs = tdp_max_x6xx45xu;
 #endif
 	} else {
 		tdp_min_defs = NULL;
@@ -176,6 +287,7 @@ static long clevo_ioctl_interface(struct file *file, unsigned int cmd, unsigned 
 	u32 result = 0, status;
 	u32 copy_result;
 	u32 argument = (u32) arg;
+	int i;
 
 	u32 clevo_arg;
 
@@ -207,6 +319,10 @@ static long clevo_ioctl_interface(struct file *file, unsigned int cmd, unsigned 
 			copy_to_user((int32_t *) arg, &result, sizeof(result));
 			break;*/
 		case R_CL_WEBCAM_SW:
+			if (dmi_match(DMI_PRODUCT_SKU, "AURA14GEN3") ||
+			    dmi_match(DMI_PRODUCT_SKU, "AURA15GEN3") ||
+			    dmi_match(DMI_PRODUCT_SKU, "AURA14GEN4 / AURA15GEN4"))
+				return -ENODEV;
 			status = clevo_evaluate_method(CLEVO_CMD_GET_WEBCAM_SW, 0, &result);
 			copy_result = copy_to_user((int32_t *) arg, &result, sizeof(result));
 			break;
@@ -223,6 +339,19 @@ static long clevo_ioctl_interface(struct file *file, unsigned int cmd, unsigned 
 	switch (cmd) {
 		case W_CL_FANSPEED:
 			copy_result = copy_from_user(&argument, (int32_t *) arg, sizeof(argument));
+
+			// Don't allow vallues between fan-off and minimum fan-on-speed
+			u8 fanspeeds[3] = { argument & 0xff, argument >> 8 & 0xff, argument >> 16 & 0xff };
+			for (i = 0; i < 3; ++i) {
+				if (fanspeeds[i] < FAN_ON_MIN_SPEED_PERCENT * NB01_FAN_SPEED_MAX / 2 / 100)
+					fanspeeds[i] = 0;
+				else if (fanspeeds[i] < FAN_ON_MIN_SPEED_PERCENT * NB01_FAN_SPEED_MAX / 100)
+					fanspeeds[i] = FAN_ON_MIN_SPEED_PERCENT * NB01_FAN_SPEED_MAX / 100;
+			}
+			argument = fanspeeds[0];
+			argument |= fanspeeds[1] << 8;
+			argument |= fanspeeds[2] << 16;
+
 			clevo_evaluate_method(CLEVO_CMD_SET_FANSPEED_VALUE, argument, &result);
 			// Note: Delay needed to let hardware catch up with the written value.
 			// No known ready flag. If the value is read too soon, the old value
@@ -236,6 +365,9 @@ static long clevo_ioctl_interface(struct file *file, unsigned int cmd, unsigned 
 			clevo_evaluate_method(CLEVO_CMD_SET_FANSPEED_AUTO, argument, &result);
 			break;
 		case W_CL_WEBCAM_SW:
+			if (dmi_match(DMI_PRODUCT_SKU, "AURA14GEN3") ||
+			    dmi_match(DMI_PRODUCT_SKU, "AURA15GEN3"))
+				return -ENODEV;
 			copy_result = copy_from_user(&argument, (int32_t *) arg, sizeof(argument));
 			status = clevo_evaluate_method(CLEVO_CMD_GET_WEBCAM_SW, 0, &result);
 			// Only set status if it isn't already the right value
@@ -254,190 +386,9 @@ static long clevo_ioctl_interface(struct file *file, unsigned int cmd, unsigned 
 			break;
 		case W_CL_PERF_PROFILE:
 			copy_result = copy_from_user(&argument, (int32_t *) arg, sizeof(argument));
-			clevo_arg = (CLEVO_OPT_SUBCMD_SET_PERF_PROF << 0x18) | (argument & 0xff);
+			clevo_arg = (CLEVO_CMD_OPT_SUB_SET_PERF_PROF << 0x18) | (argument & 0xff);
 			clevo_evaluate_method(CLEVO_CMD_OPT, clevo_arg, &result);
 			break;
-	}
-
-	return 0;
-}
-
-static int has_universal_ec_fan_control(void) {
-	int ret;
-	u8 data;
-
-	if (uw_feats->model == UW_MODEL_PH4TRX) {
-		// For some reason, on this particular device, the 2nd fan is not controlled via the
-		// "GPU" fan curve when the bit to separate both fancurves is set, but the old fan
-		// control works just fine.
-		return 0;
-	}
-
-	ret = uniwill_read_ec_ram(0x078e, &data);
-	if (ret < 0) {
-		return ret;
-	}
-	return (data >> 6) & 1;
-}
-
-static int set_full_fan_mode(bool enable) {
-	u8 mode_data;
-
-	uniwill_read_ec_ram(0x0751, &mode_data);
-
-	if (enable && !(mode_data & 0x40)) {
-		// If not "full fan mode" (i.e. 0x40 bit not set) switch to it (required for old fancontrol)
-		return uniwill_write_ec_ram(0x0751, mode_data | 0x40);
-	}
-	else if (mode_data & 0x40){
-		// If "full fan mode" (i.e. 0x40 bit set) turn it off (required for new fancontrol)
-		return uniwill_write_ec_ram(0x0751, mode_data & ~0x40);
-	}
-
-	return 0;
-}
-
-static bool fans_initialized = false;
-
-static int uw_init_fan(void) {
-	int i;
-
-	u16 addr_use_custom_fan_table_0 = 0x07c5; // use different tables for both fans (0x0f00-0x0f2f and 0x0f30-0x0f5f respectivly)
-	u16 addr_use_custom_fan_table_1 = 0x07c6; // enable 0x0fxx fantables
-	u8 offset_use_custom_fan_table_0 = 7;
-	u8 offset_use_custom_fan_table_1 = 2;
-	u8 value_use_custom_fan_table_0;
-	u8 value_use_custom_fan_table_1;
-	u16 addr_cpu_custom_fan_table_end_temp = 0x0f00;
-	u16 addr_cpu_custom_fan_table_start_temp = 0x0f10;
-	u16 addr_cpu_custom_fan_table_fan_speed = 0x0f20;
-	u16 addr_gpu_custom_fan_table_end_temp = 0x0f30;
-	u16 addr_gpu_custom_fan_table_start_temp = 0x0f40;
-	u16 addr_gpu_custom_fan_table_fan_speed = 0x0f50;
-
-	if (!fans_initialized && (has_universal_ec_fan_control() == 1)) {
-		set_full_fan_mode(false);
-
-		uniwill_read_ec_ram(addr_use_custom_fan_table_0, &value_use_custom_fan_table_0);
-		if (!((value_use_custom_fan_table_0 >> offset_use_custom_fan_table_0) & 1)) {
-			uniwill_write_ec_ram_with_retry(addr_use_custom_fan_table_0, value_use_custom_fan_table_0 + (1 << offset_use_custom_fan_table_0), 3);
-		}
-
-		uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_end_temp, 0xff, 3);
-		uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_start_temp, 0x00, 3);
-		uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_fan_speed, 0x00, 3);
-		uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_end_temp, 0xff, 3);
-		uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_start_temp, 0x00, 3);
-		uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_fan_speed, 0x00, 3);
-		for (i = 0x1; i <= 0xf; ++i) {
-			uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_end_temp + i, 0xff, 3);
-			uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_start_temp + i, 0xff, 3);
-			uniwill_write_ec_ram_with_retry(addr_cpu_custom_fan_table_fan_speed + i, 0x00, 3);
-			uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_end_temp + i, 0xff, 3);
-			uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_start_temp + i, 0xff, 3);
-			uniwill_write_ec_ram_with_retry(addr_gpu_custom_fan_table_fan_speed + i, 0x00, 3);
-		}
-
-		uniwill_read_ec_ram(addr_use_custom_fan_table_1, &value_use_custom_fan_table_1);
-		if (!((value_use_custom_fan_table_1 >> offset_use_custom_fan_table_1) & 1)) {
-			uniwill_write_ec_ram_with_retry(addr_use_custom_fan_table_1, value_use_custom_fan_table_1 + (1 << offset_use_custom_fan_table_1), 3);
-		}
-	}
-
-	fans_initialized = true;
-
-	return 0;
-}
-
-static u32 uw_set_fan(u32 fan_index, u8 fan_speed)
-{
-	u32 i;
-	u8 mode_data;
-	u16 addr_fan0 = 0x1804;
-	u16 addr_fan1 = 0x1809;
-	u16 addr_for_fan;
-
-	u16 addr_cpu_custom_fan_table_fan_speed = 0x0f20;
-	u16 addr_gpu_custom_fan_table_fan_speed = 0x0f50;
-
-	if (has_universal_ec_fan_control() == 1) {
-		uw_init_fan();
-
-		if (fan_index == 0)
-			addr_for_fan = addr_cpu_custom_fan_table_fan_speed;
-		else if (fan_index == 1)
-			addr_for_fan = addr_gpu_custom_fan_table_fan_speed;
-		else
-			return -EINVAL;
-
-		if (fan_speed == 0) {
-			// Avoid hard coded EC behaviour: Setting fan speed = 0x00 spins the fan up
-			// to 0x3c (30%) for 3 minutes before going to 0x00. Setting fan speed = 1
-			// also causes the fan to stop since on 2020 or later TF devices the
-			// microcontroller in the fan itself is intelligent enough to not try to
-			// start up the motor when the speed is to slow. Older devices don't use
-			// this fan controll anyway, but the else case below.
-			fan_speed = 1;
-		}
-
-		uniwill_write_ec_ram(addr_for_fan, fan_speed & 0xff);
-	}
-	else { // old workaround using full fan mode
-		if (fan_index == 0)
-			addr_for_fan = addr_fan0;
-		else if (fan_index == 1)
-			addr_for_fan = addr_fan1;
-		else
-			return -EINVAL;
-
-		// Check current mode
-		uniwill_read_ec_ram(0x0751, &mode_data);
-		if (!(mode_data & 0x40)) {
-			// If not "full fan mode" (i.e. 0x40 bit set) switch to it (required for fancontrol)
-			set_full_fan_mode(true);
-			// Attempt to write both fans as quick as possible before complete ramp-up
-			pr_debug("prevent ramp-up start\n");
-			for (i = 0; i < 10; ++i) {
-				uniwill_write_ec_ram(addr_fan0, fan_speed & 0xff);
-				uniwill_write_ec_ram(addr_fan1, fan_speed & 0xff);
-				msleep(10);
-			}
-			pr_debug("prevent ramp-up done\n");
-		} else {
-			// Otherwise just set the chosen fan
-			uniwill_write_ec_ram(addr_for_fan, fan_speed & 0xff);
-		}
-	}
-
-	return 0;
-}
-
-static u32 uw_set_fan_auto(void)
-{
-	u8 mode_data;
-
-	if (has_universal_ec_fan_control() == 1) {
-		u16 addr_use_custom_fan_table_0 = 0x07c5; // use different tables for both fans (0x0f00-0x0f2f and 0x0f30-0x0f5f respectivly)
-		u16 addr_use_custom_fan_table_1 = 0x07c6; // enable 0x0fxx fantables
-		u8 offset_use_custom_fan_table_0 = 7;
-		u8 offset_use_custom_fan_table_1 = 2;
-		u8 value_use_custom_fan_table_0;
-		u8 value_use_custom_fan_table_1;
-		uniwill_read_ec_ram(addr_use_custom_fan_table_1, &value_use_custom_fan_table_1);
-		if ((value_use_custom_fan_table_1 >> offset_use_custom_fan_table_1) & 1) {
-			uniwill_write_ec_ram_with_retry(addr_use_custom_fan_table_1, value_use_custom_fan_table_1 - (1 << offset_use_custom_fan_table_1), 3);
-		}
-		uniwill_read_ec_ram(addr_use_custom_fan_table_0, &value_use_custom_fan_table_0);
-		if ((value_use_custom_fan_table_0 >> offset_use_custom_fan_table_0) & 1) {
-			uniwill_write_ec_ram_with_retry(addr_use_custom_fan_table_0, value_use_custom_fan_table_0 - (1 << offset_use_custom_fan_table_0), 3);
-		}
-		fans_initialized = false;
-	}
-	else {
-		// Get current mode
-		uniwill_read_ec_ram(0x0751, &mode_data);
-		// Switch off "full fan mode" (i.e. unset 0x40 bit)
-		uniwill_write_ec_ram(0x0751, mode_data & 0xbf);
 	}
 
 	return 0;
@@ -476,6 +427,7 @@ static int uw_get_tdp_max(u8 tdp_index)
 static int uw_get_tdp(u8 tdp_index)
 {
 	u8 tdp_data;
+	int tdp_value;
 	u16 tdp_base_addr = 0x0783;
 	u16 tdp_current_addr = tdp_base_addr + tdp_index;
 	int status;
@@ -489,14 +441,26 @@ static int uw_get_tdp(u8 tdp_index)
 	if (status < 0)
 		return status;
 
-	return tdp_data;
+	if (tdp_index == 2 && uw_feats->uniwill_has_double_pl4)
+		tdp_value = (int)tdp_data * 2;
+	else
+		tdp_value = tdp_data;
+
+	return tdp_value;
 }
 
-static int uw_set_tdp(u8 tdp_index, u8 tdp_data)
+static int uw_set_tdp(u8 tdp_index, int tdp_value)
 {
 	int tdp_min, tdp_max;
+	u8 tdp_data;
 	u16 tdp_base_addr = 0x0783;
 	u16 tdp_current_addr = tdp_base_addr + tdp_index;
+
+	if (uw_feats->uniwill_custom_profile_mode_needed) {
+		// Ensure that "overboost" profile is chosen when using TDP set
+		// for devices that require this
+		uw_set_performance_profile_v1(PROFILE_OVERBOOST);
+	}
 
 	// Use min tdp to detect support for chosen tdp parameter
 	int min_tdp_status = uw_get_tdp_min(tdp_index);
@@ -505,8 +469,13 @@ static int uw_set_tdp(u8 tdp_index, u8 tdp_data)
 
 	tdp_min = uw_get_tdp_min(tdp_index);
 	tdp_max = uw_get_tdp_max(tdp_index);
-	if (tdp_data < tdp_min || tdp_data > tdp_max)
+	if (tdp_value < tdp_min || tdp_value > tdp_max)
 		return -EINVAL;
+
+	if (tdp_index == 2 && uw_feats->uniwill_has_double_pl4)
+		tdp_data = tdp_value / 2;
+	else
+		tdp_data = tdp_value;
 
 	uniwill_write_ec_ram(tdp_current_addr, tdp_data);
 
@@ -517,7 +486,7 @@ static int uw_set_tdp(u8 tdp_index, u8 tdp_data)
  * Set profile 1-3 to 0xa0, 0x00 or 0x10 depending on
  * device support.
  */
-static u32 uw_set_performance_profile_v1(u8 profile_index)
+static u32 uw_set_performance_profile_v1(enum uw_perf_profiles_v1 profile)
 {
 	u8 current_value = 0x00, next_value;
 	u8 clear_bits = 0xa0 | 0x10;
@@ -525,7 +494,7 @@ static u32 uw_set_performance_profile_v1(u8 profile_index)
 	result = uniwill_read_ec_ram(0x0751, &current_value);
 	if (result >= 0) {
 		next_value = current_value & ~clear_bits;
-		switch (profile_index) {
+		switch (profile) {
 		case 0x01:
 			next_value |= 0xa0;
 			break;
@@ -582,11 +551,15 @@ static long uniwill_ioctl_interface(struct file *file, unsigned int cmd, unsigne
 			break;
 		case R_UW_FANSPEED:
 			uniwill_read_ec_ram(0x1804, &byte_data);
+			if (uw_feats->uniwill_has_universal_ec_fan_control && byte_data == 1)
+				byte_data = 0; // 1 is 0 behaviour see: uw_set_fan
 			result = byte_data;
 			copy_result = copy_to_user((void *) arg, &result, sizeof(result));
 			break;
 		case R_UW_FANSPEED2:
 			uniwill_read_ec_ram(0x1809, &byte_data);
+			if (uw_feats->uniwill_has_universal_ec_fan_control && byte_data == 1)
+				byte_data = 0; // 1 is 0 behaviour see: uw_set_fan
 			result = byte_data;
 			copy_result = copy_to_user((void *) arg, &result, sizeof(result));
 			break;
@@ -611,7 +584,7 @@ static long uniwill_ioctl_interface(struct file *file, unsigned int cmd, unsigne
 			copy_result = copy_to_user((void *) arg, &result, sizeof(result));
 			break;
 		case R_UW_FANS_OFF_AVAILABLE:
-			/*result = has_universal_ec_fan_control();
+			/*result = uw_feats->uniwill_has_universal_ec_fan_control ? 1 : 0;
 			if (result == 1) {
 				result = 0;
 			}
@@ -622,14 +595,14 @@ static long uniwill_ioctl_interface(struct file *file, unsigned int cmd, unsigne
 			copy_result = copy_to_user((void *) arg, &result, sizeof(result));
 			break;
 		case R_UW_FANS_MIN_SPEED:
-			/*result = has_universal_ec_fan_control();
+			/*result = uw_feats->uniwill_has_universal_ec_fan_control? 1 : 0;
 			if (result == 1) {
 				result = 20;
 			}
 			else if (result == 0) {
 				result = 0;
 			}*/
-			result = 20;
+			result = FAN_ON_MIN_SPEED_PERCENT;
 			copy_result = copy_to_user((void *) arg, &result, sizeof(result));
 			break;
 		case R_UW_TDP0:
@@ -696,14 +669,11 @@ static long uniwill_ioctl_interface(struct file *file, unsigned int cmd, unsigne
 
 	switch (cmd) {
 		case W_UW_FANSPEED:
-			// Get fan speed argument
-			copy_result = copy_from_user(&argument, (int32_t *) arg, sizeof(argument));
-			uw_set_fan(0, argument);
-			break;
 		case W_UW_FANSPEED2:
 			// Get fan speed argument
 			copy_result = copy_from_user(&argument, (int32_t *) arg, sizeof(argument));
-			uw_set_fan(1, argument);
+			u8 fan_select = (cmd == W_UW_FANSPEED2);
+			uw_set_fan(fan_select, argument);
 			break;
 		case W_UW_MODE:
 			copy_result = copy_from_user(&argument, (int32_t *) arg, sizeof(argument));
@@ -811,6 +781,8 @@ static int __init tuxedo_io_init(void)
 	id_check_uniwill = uniwill_identify();
 
 #ifdef DEBUG
+	pr_debug("DEBUG is defined\n");
+
 	if (id_check_clevo == 0 && id_check_uniwill == 0) {
 		pr_debug("No matching hardware found on module load\n");
 	}
@@ -836,7 +808,7 @@ static int __init tuxedo_io_init(void)
 
 	device_create(tuxedo_io_device_class, NULL, tuxedo_io_device_handle, NULL, "tuxedo_io");
 	pr_debug("Module init successful\n");
-
+	
 	return 0;
 }
 

@@ -1,4 +1,10 @@
-kfocus-keyboard (3.1.4-0kfocus9~beta1) noble; urgency=medium
+kfocus-keyboard (4.22.2-0kfocus1~alpha1) resolute; urgency=medium
+
+  * Upgrade to latest tuxedo-drivers code (#6584)
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Thu, 14 May 2026 10:43:46 -0500
+
+kfocus-keyboard (3.1.4-0kfocus9) noble; urgency=medium
 
   * Patched to support kernels >= 6.17 (#6558)
 

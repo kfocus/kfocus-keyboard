@@ -1,34 +1,58 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*!
  * Copyright (c) 2018-2020 TUXEDO Computers GmbH <tux@tuxedocomputers.com>
  *
- * This file is part of tuxedo-keyboard.
+ * This file is part of tuxedo-drivers.
  *
- * tuxedo-keyboard is free software: you can redistribute it and/or modify
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * This software is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this software.  If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see <https://www.gnu.org/licenses/>.
  */
+
 #define pr_fmt(fmt) "tuxedo_keyboard" ": " fmt
 
 #include "tuxedo_keyboard_common.h"
 #include "clevo_keyboard.h"
 #include "uniwill_keyboard.h"
+#include "tuxedo_compatibility_check/tuxedo_compatibility_check.h"
 #include <linux/mutex.h>
+#include <asm/cpu_device_id.h>
+#include <asm/intel-family.h>
+#include <linux/mod_devicetable.h>
 
 MODULE_AUTHOR("TUXEDO Computers GmbH <tux@tuxedocomputers.com>");
 MODULE_DESCRIPTION("TUXEDO Computers keyboard & keyboard backlight Driver");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("3.1.4");
 
 static DEFINE_MUTEX(tuxedo_keyboard_init_driver_lock);
+
+// sysfs device function
+static ssize_t fn_lock_show(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+{
+	// one sysfs device for clevo or uniwill
+	return current_driver->fn_lock_show(dev, attr, buf);
+}
+
+// sysfs device function
+static ssize_t fn_lock_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t size)
+{
+	return current_driver->fn_lock_store(dev, attr, buf, size);
+}
+
+static DEVICE_ATTR_RW(fn_lock);
 
 // static struct tuxedo_keyboard_driver *driver_list[] = { };
 
@@ -107,7 +131,17 @@ struct platform_device *tuxedo_keyboard_init_driver(struct tuxedo_keyboard_drive
 			}
 		}
 
+		// set current driver (clevo or uniwill)
 		current_driver = tk_driver;
+
+		// test for fn lock and create sysfs device
+		if (current_driver->fn_lock_available()) {
+			err = device_create_file(&tuxedo_platform_device->dev, &dev_attr_fn_lock);
+			if(err)
+				pr_err("device_create_file for fn_lock failed\n");
+		} else {
+			pr_debug("FnLock not available\n");
+		}
 	}
 
 init_driver_exit:
@@ -126,12 +160,13 @@ static void __exit tuxedo_input_exit(void)
 	{
 		tuxedo_input_device = NULL;
 	}
+
 }
 
 void tuxedo_keyboard_remove_driver(struct tuxedo_keyboard_driver *tk_driver)
 {
 	bool specified_driver_differ_from_used =
-		tk_driver != NULL &&
+		tk_driver != NULL && 
 		(
 			strcmp(
 				tk_driver->platform_driver->driver.name,
@@ -141,6 +176,8 @@ void tuxedo_keyboard_remove_driver(struct tuxedo_keyboard_driver *tk_driver)
 
 	if (specified_driver_differ_from_used)
 		return;
+
+	device_remove_file(&tuxedo_platform_device->dev, &dev_attr_fn_lock);
 
 	TUXEDO_DEBUG("tuxedo_input_exit()\n");
 	tuxedo_input_exit();
@@ -161,6 +198,10 @@ EXPORT_SYMBOL(tuxedo_keyboard_remove_driver);
 static int __init tuxedo_keyboard_init(void)
 {
 	TUXEDO_INFO("module init\n");
+
+	if (!tuxedo_is_compatible())
+		return -ENODEV;
+
 	return 0;
 }
 

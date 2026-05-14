@@ -1,273 +1,75 @@
 # Table of Content
-- <a href="#fork">Fork Details</a>
 - <a href="#description">Description</a>
-- <a href="#building">Building and Install</a>
-- <a href="#using">Using</a>
-- <a href="#sysfs">Sysfs</a>
-- <a href="#kernelparam">Kernel Parameter</a>
-- <a href="#modes">Modes</a>
+- <a href="#building-and-install">Building and Install</a>
+- <a href="#troubleshooting">Troubleshooting</a>
+- <a href="#regarding-upstreaming-of-tuxedo-drivers">Regarding upstreaming of tuxedo-drivers</a>
 
-# Fork Details <a href="fork"></a>
-This module is used by TUXEDO to support their version of the Kubuntu Focus
-which launched in Europe in March 2020. This fork by the Kubuntu Focus Team
-(KFocus) is used to support the same and subsequent models released in the US.
+# Description
+Drivers for several platform devices for TUXEDO notebooks meant for DKMS.
 
-This is currently a quilt package. Here are the steps we use to build and
-upload.
+## Features implemented by this driver package
+- Fn-keys
+- Keyboard backlight
+- Fan control
+- Power control
+- Other sensors
+- Hardware specific userspace quirks
 
-```bash
-# If user already has debian name variables set, keep them somewhere
-function ifIsSet () { [ -n "${!1:-}" ]; }
-_src_file='kfocus-keyboard_3.1.4.orig.tar.xz';
-while true; do
-  # Ensure the source exist above this directory
-  if ! [ -f "../${_src_file}" ]; then
-    echo "ABORT: Missing source tar.xz file: ../${_src_file}";
-    break;
-  fi
+## Modules included in this package
+- clevo_acpi
+- clevo_wmi
+- tuxedo_keyboard
+- uniwill_wmi
+- ite_8291
+- ite_8291_lb
+- ite_8297
+- ite_829x
+- tuxedo_io
+- tuxedo_compatibility_check
+- tuxedo_nb05_keyboard
+- tuxedo_nb05_power_profiles
+- tuxedo_nb05_ec
+- tuxedo_nb05_sensors
+- tuxedo_nb04_keyboard
+- tuxedo_nb04_wmi_ab
+- tuxedo_nb04_wmi_bs
+- tuxedo_nb04_sensors
+- tuxedo_nb04_power_profiles
+- tuxedo_nb04_kbd_backlight
+- tuxedo_nb05_kbd_backlight
+- tuxedo_nb02_nvidia_power_ctrl
+- tuxedo_nb05_fan_control
+- tuxi_acpi
+- tuxedo_tuxi_fan_control
+- stk8321
+- gxtp7380
 
-  # Export key values so we can sign packages
-  ifIsSet DEBEMAIL || export USERDEBEMAIL=${DEBEMAIL};
-  export DEBEMAIL=${KFOCUSEMAIL};
-
-  # Update changelog
-  if ! dch -UD jammy; then
-    echo 'ABORT: Changelog update failed.';
-    break;
-  fi
-
-  # Build source, no dependencies, add upstream *tar.xz tarball
-  if ! debuild -S -d -sa; then
-    echo 'ABORT: Build failed.';
-    break;
-  fi
-
-  # Cleanup debhelper files
-  if ! dh_clean; then
-    echo 'ABORT: Cleanup failed.';
-    break;
-  fi
-
-  # Now upload
-  if ! cd ../; then
-    echo 'ABORT: Cannot cd to parent directory';
-    break;
-  fi
-
-  if ! dput ppa:kfocus-team/package-testing \
-    kfocus-keyboard_3.1.4-0kfocus*_source.changes; then
-    echo 'ABORT: Cannot upload changes file';
-    break;
-  fi
-
-  echo 'Everything appears to have worked as expect.'
-done
-```
-
-# Description <a name="description"></a>
-TUXEDO Computers kernel module drivers for keyboard, keyboard backlight & general hardware I/O
-
-Features
-- Driver for Fn-keys
-- Sysfs control of brightness/color/mode for most TUXEDO keyboards (note: white backlight only models are currently not supported)
-- Hardware I/O driver for TUXEDO Control Center
-
-Modules included in this package
-- tuxedo-keyboard
-- tuxedo-io
-- clevo-wmi
-- clevo-acpi
-
-# Building and Install <a name="building"></a>
+# Building and Install
 
 ## Dependencies:
+All:
 - make
-- gcc
-- linux-headers
-- dkms (Only when using this module with DKMS functionality)
 
-## Warning when installing the module:
+`make package-*`:
+- [simple-package-creator](https://gitlab.com/tuxedocomputers/development/packages/simple-package-creator)
+- [simple-package-tools](https://gitlab.com/tuxedocomputers/development/packages/simple-package-tools)
 
-Use either method only. Do not combine installation methods, such as starting with the build step below and proceeding to use the same build artifacts with the DKMS module. Otherwise the module built via dkms will fail to load with an `exec_format` error on newer kernels due to a mismatched version magic.
+# Troubleshooting
 
-This is why the DKMS build step begins with a `make clean` step. 
+## The keyboard backlight control and/or touchpad toggle key combinations do not work
+For all devices with a touchpad toggle key(-combo) and some devices with keyboard backlight control key-combos the driver does nothing more then to send the corresponding key event to userspace where it is the desktop environments duty to carry out the action. Some smaller desktop environments however don't bind an action to these keys by default so it seems that these keys don't work.
 
-For convenience, on platforms where DKMS is in use, skip to the DKMS section directly.
+Please refer to your desktop environments documentation on how to set custom keybindings to fix this.
 
-## Clone the Git Repo:
+For keyboard brightness control you should use the D-Bus interface of UPower as actions for the key presses.
 
-```sh
-git clone https://github.com/tuxedocomputers/tuxedo-keyboard.git
+For touchpad toggle on X11 you can use `xinput` to enable/disable the touchpad, on Wayland the correct way is desktop environment specific.
 
-cd tuxedo-keyboard
+# Regarding upstreaming of tuxedo-drivers
+The code, while perfectly functional, is currently not in an upstreamable state. That being said we started an upstreaming effort and the first small part, the keyboard backlight control for the Sirius 16 Gen 1 & 2, already got accepted.
 
-git checkout release
-```
-
-## Build the Module:
-
-```sh
-make clean && make
-```
-
-## The DKMS route:
-
-### Add as DKMS Module:
-
-Install the Module:
-```sh
-make clean
-
-sudo make dkmsinstall
-```
-
-Load the Module with modprobe:
-```sh
-modprobe tuxedo_keyboard
-```
-or
-```sh
-sudo modprobe tuxedo_keyboard
-```
-
-You might also want to activate `tuxedo_io` module the same way if you are using [TCC](https://github.com/tuxedocomputers/tuxedo-control-center).
-
-### Uninstalling the DKMS module:
-
-Remove the DKMS module and source:
-```sh
-sudo make dkmsremove
-
-sudo rm /etc/modprobe.d/tuxedo_keyboard.conf
-```
-
-# Using <a name="using"></a>
-
-## modprobe
-
-```sh
-modprobe tuxedo_keyboard
-```
-
-## Load the Module on boot:
-
-If a module is relevant it will be loaded automatically on boot. If it is not loaded after a reboot, it most likely means that it is not needed.
-
-Add Module to /etc/modules
-```sh
-sudo su
-
-echo tuxedo_keyboard >> /etc/modules
-```
-
-Default Parameters at start.
-
-
-In this example, we start the kernel module with the following settings:
-
-- mode 0 (Custom / Default Mode)
-- red color for the left side of keyboard 
-- green color for the center of keyboard 
-- blue color for the right side of keyboard 
-
-Note that we write it's settings to a `.conf` file under `/etc/modprobe.d` named `tuxedo_keyboard.conf`. 
-
-```sh
-sudo su
-
-echo "options tuxedo_keyboard mode=0 color_left=0xFF0000 color_center=0x00FF00 color_right=0x0000FF" > /etc/modprobe.d/tuxedo_keyboard.conf
-```
-or
-```sh
-sudo cp tuxedo_keyboard.conf /etc/modprobe.d/tuxedo_keyboard.conf
-```
-
-# Sysfs <a name="sysfs"></a>
-
-## General
-Path: `/sys/devices/platform/tuxedo_keyboard`
-
-## color_left
-Allowed Values: Hex-Value (e.g. `0xFF0000` for the Color Red)   
-Description: Set the color of the left Keyboard Side
-
-## color_center
-Allowed Values: Hex-Value (e.g. `0xFF0000` for the Color Red)   
-Description: Set the color of the center of Keyboard
-
-## color_right
-Allowed Values: Hex-Value (e.g. `0xFF0000` for the Color Red)   
-Description: Set the color of the right Keyboard Side
-
-## color_extra
-Allowed Values: Hex-Value (e.g. `0xFF0000` for the Color Red)   
-Description: Set the color of the extra region (if exist) of the Keyboard
-
-## brightness
-Allowed Values: `0` - `255`   
-Description: Set the brightness of the Keyboard
-
-## mode
-Allowed Values: `0` - `7`   
-Description: Set the mode of the Keyboard. A list with the modes is under <a href="#modes">Modes</a>
-
-## state
-Allowed Values: `0`, `1`   
-Description: Set the State of keyboard, `0` is keyboard is off and `1` is keyboard is on
-
-## extra
-Allowed Values: `0`, `1`   
-Description: Only get the information, if the keyboard have the extra region
-
-# Kernel Parameter <a name="kernelparam"></a>
-
-## Using
-```sh
-sudo modprobe tuxedo_keyboard <params>
-```
-
-## color_left
-Set the color of the left Keyboard Side
-
-## color_center
-Set the color of the left Keyboard Side
-
-## color_right
-Set the color of the left Keyboard Side
-
-## color_extra
-Set the color of the left Keyboard extra region (Only when is a supported keyboard)
-
-## mode
-Set the mode (on/off) of keyboard
-
-## brightness
-Set the brightness of keyboard
-
-## state
-
-# Modes <a name="modes"></a>
-
-## CUSTOM
-Value: `0`
-
-## BREATHE
-Value: `1`
-
-## CYCLE
-Value: `2`
-
-## DANCE
-Value: `3`
-
-## FLASH
-Value: `4`
-
-## RANDOM_COLOR
-Value: `5`
-
-## TEMPO
-Value: `6`
-
-## WAVE
-Value: `7`
+If you want to hack away at this matter yourself please follow the following precautions and guidelines to avoid breakages on both software and hardware level:
+- Involve us in the whole process. Nothing is won if at some point tuxedo-control-center or the dkms variant of tuxedo-drivers stops working. Especially when you send something to the LKML, please set us in the cc.
+- We mostly can't share documentation, but we can answer questions.
+- Code interacting with the EC, which is most of tuxedo-drivers, can brick devices and therefore must be ensured to only run on compatible and tested devices.
+- If you use tuxedo-drivers as a reference or code snippets from it, a "Codeveloped-by:\<name\> \<tuxedo_email\>" must be included in your upstream commit, with \<name\> and \<tuxedo_email\> depending on the actual part of tuxedo-drivers being used. Please talk to us regarding this.

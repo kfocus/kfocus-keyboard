@@ -6,53 +6,53 @@ set -e
 
 #DEBHELPER#
 
-case "$1" in
-    configure)
-        # Install default config if none exist already
-        if [ ! -f "/etc/modprobe.d/tuxedo_keyboard.conf" ]; then
-            cp -f /usr/share/tuxedo-keyboard/tuxedo_keyboard.conf /etc/modprobe.d/tuxedo_keyboard.conf
-        fi
-
-        # Attempt to (re-)load module immediately, fail silently if not possible at this stage
-
-        # Also stop tccd service if running before
-        echo "Check tccd running status"
-        if systemctl is-active --quiet tccd.service; then
-            TCCD_RUNNING=true
-        else
-            TCCD_RUNNING=false
-        fi
-
-        if [ "$TCCD_RUNNING" = 'true' ]; then
-            echo "Stop tccd temporarily"
-            systemctl stop tccd 2>&1 || true
-        fi
-
-        echo "(Re)load modules if possible"
-        rmmod tuxedo_io > /dev/null 2>&1 || true
-        rmmod uniwill_wmi > /dev/null 2>&1 || true
-        rmmod clevo_wmi > /dev/null 2>&1 || true
-        rmmod clevo_acpi > /dev/null 2>&1 || true
-        rmmod tuxedo_keyboard > /dev/null 2>&1 || true
-
-        modprobe tuxedo_keyboard > /dev/null 2>&1 || true
-        modprobe uniwill_wmi > /dev/null 2>&1 || true
-        modprobe clevo_wmi > /dev/null 2>&1 || true
-        modprobe clevo_acpi > /dev/null 2>&1 || true
-        modprobe tuxedo_io > /dev/null 2>&1 || true
-
-        # Restart tccd after reload if it was running
-        if $TCCD_RUNNING; then
-            echo "Start tccd again"
-            systemctl start tccd 2>&1 || true
-        fi
-    ;;
-
-    abort-upgrade|abort-remove|abort-deconfigure)
-    ;;
-
-    *)
-        echo "postinst called with unknown argument \`$1'" >&2
-        exit 1
-    ;;
-esac
+#case "$1" in
+#    configure)
+#        # Install default config if none exist already
+#        if [ ! -f "/etc/modprobe.d/tuxedo_keyboard.conf" ]; then
+#            cp -f /usr/share/tuxedo-keyboard/tuxedo_keyboard.conf /etc/modprobe.d/tuxedo_keyboard.conf
+#        fi
+#
+#        # Attempt to (re-)load module immediately, fail silently if not possible at this stage
+#
+#        # Also stop tccd service if running before
+#        echo "Check tccd running status"
+#        if systemctl is-active --quiet tccd.service; then
+#            TCCD_RUNNING=true
+#        else
+#            TCCD_RUNNING=false
+#        fi
+#
+#        if [ "$TCCD_RUNNING" = 'true' ]; then
+#            echo "Stop tccd temporarily"
+#            systemctl stop tccd 2>&1 || true
+#        fi
+#
+#        echo "(Re)load modules if possible"
+#        rmmod tuxedo_io > /dev/null 2>&1 || true
+#        rmmod uniwill_wmi > /dev/null 2>&1 || true
+#        rmmod clevo_wmi > /dev/null 2>&1 || true
+#        rmmod clevo_acpi > /dev/null 2>&1 || true
+#        rmmod tuxedo_keyboard > /dev/null 2>&1 || true
+#
+#        modprobe tuxedo_keyboard > /dev/null 2>&1 || true
+#        modprobe uniwill_wmi > /dev/null 2>&1 || true
+#        modprobe clevo_wmi > /dev/null 2>&1 || true
+#        modprobe clevo_acpi > /dev/null 2>&1 || true
+#        modprobe tuxedo_io > /dev/null 2>&1 || true
+#
+#        # Restart tccd after reload if it was running
+#        if $TCCD_RUNNING; then
+#            echo "Start tccd again"
+#            systemctl start tccd 2>&1 || true
+#        fi
+#    ;;
+#
+#    abort-upgrade|abort-remove|abort-deconfigure)
+#    ;;
+#
+#    *)
+#        echo "postinst called with unknown argument \`$1'" >&2
+#        exit 1
+#    ;;
+#esac

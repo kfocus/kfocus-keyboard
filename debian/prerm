@@ -1,23 +1,22 @@
 #!/bin/sh
 
-module=tuxedo-keyboard
-version=3.1.4
-
+#module=tuxedo-keyboard
+#version=3.1.4
+#
 set -e
-
-case "$1" in
-    remove)
-        rm -f /etc/modprobe.d/tuxedo_keyboard.conf || true
-    ;;
-
-    upgrade|deconfigure|failed-upgrade)
-    ;;
-
-    *)
-        echo "prerm called with unknown argument \`$1'" >&2
-        exit 1
-    ;;
-esac
+#
+#case "$1" in
+#    remove)
+#        rm -f /etc/modprobe.d/tuxedo_keyboard.conf || true
+#    ;;
+#
+#    upgrade|deconfigure|failed-upgrade)
+#    ;;
+#
+#    *)
+#        echo "prerm called with unknown argument \`$1'" >&2
+#        exit 1
+#    ;;
+#esac
 
 #DEBHELPER#
-

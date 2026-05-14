@@ -1,1 +1,1 @@
-obj-m += src/
+obj-y += src/

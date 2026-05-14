@@ -1,21 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*!
  * Copyright (c) 2021 TUXEDO Computers GmbH <tux@tuxedocomputers.com>
  *
- * This file is part of tuxedo-keyboard.
+ * This file is part of tuxedo-drivers.
  *
- * tuxedo-keyboard is free software: you can redistribute it and/or modify
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * This software is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this software.  If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see <https://www.gnu.org/licenses/>.
  */
+
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/acpi.h>
 #include <linux/module.h>
@@ -39,15 +41,23 @@
 #define UW_EC_BUSY_WAIT_CYCLES	30
 #define UW_EC_BUSY_WAIT_DELAY	15
 
-static bool uniwill_ec_direct = true;
+static bool uniwill_ec_direct = false;
 
 DEFINE_MUTEX(uniwill_ec_lock);
 
-static u32 uw_wmi_ec_evaluate(u8 addr_low, u8 addr_high, u8 data_low, u8 data_high, u8 read_flag, u32 *return_buffer)
+/*
+ * Currently known functions for this are:
+ * 0: Write via WMI
+ * 1: Read via WMI
+ * 5: Apparently used for toggling features. Currently only used for toggling
+ * the NB02 local dimming feature (only possible via WMI). It is unclear what
+ * other functionalities this might have.
+ */
+static int uw_wmi_ec_evaluate(u8 function, u32 arg, u32 *return_buffer)
 {
 	acpi_status status;
 	union acpi_object *out_acpi;
-	u32 e_result = 0;
+	int e_result = 0;
 
 	// Kernel buffer for input argument
 	u32 *wmi_arg = (u32 *) kmalloc(sizeof(u32)*10, GFP_KERNEL);
@@ -64,15 +74,10 @@ static u32 uw_wmi_ec_evaluate(u8 addr_low, u8 addr_high, u8 data_low, u8 data_hi
 	// Zero input buffer
 	memset(wmi_arg, 0x00, 10 * sizeof(u32));
 
-	// Configure the input buffer
-	wmi_arg_bytes[0] = addr_low;
-	wmi_arg_bytes[1] = addr_high;
-	wmi_arg_bytes[2] = data_low;
-	wmi_arg_bytes[3] = data_high;
+	// Configure input buffer
+	memcpy(&wmi_arg_bytes[0], &arg, sizeof(arg));
 
-	if (read_flag != 0) {
-		wmi_arg_bytes[5] = 0x01;
-	}
+	wmi_arg_bytes[5] = function;
 
 	status = wmi_evaluate_method(UNIWILL_WMI_MGMT_GUID_BC, wmi_instance, wmi_method_id, &wmi_in, &wmi_out);
 	out_acpi = (union acpi_object *) wmi_out.pointer;
@@ -98,11 +103,19 @@ static u32 uw_wmi_ec_evaluate(u8 addr_low, u8 addr_high, u8 data_low, u8 data_hi
 /**
  * EC address read through WMI
  */
-static u32 uw_ec_read_addr_wmi(u8 addr_low, u8 addr_high, union uw_ec_read_return *output)
+static int uw_ec_read_addr_wmi(u8 addr_low, u8 addr_high, union uw_ec_read_return *output)
 {
 	u32 uw_data[10];
-	u32 ret = uw_wmi_ec_evaluate(addr_low, addr_high, 0x00, 0x00, 1, uw_data);
+	u32 arg = ((u32)addr_high << 8) | ((u32)addr_low);
+
+	int ret = uw_wmi_ec_evaluate(UNIWILL_WMI_FUNCTION_READ, arg, uw_data);
 	output->dword = uw_data[0];
+
+	if (output->dword == 0xfefefefe) {
+		pr_err("WMI read error: 0x%02x%02x, data: %0#4x\n", addr_high, addr_low, output->bytes.data_low);
+		ret = -EIO;
+	}
+
 	// pr_debug("addr: 0x%02x%02x value: %0#4x (high: %0#4x) result: %d\n", addr_high, addr_low, output->bytes.data_low, output->bytes.data_high, ret);
 	return ret;
 }
@@ -110,21 +123,31 @@ static u32 uw_ec_read_addr_wmi(u8 addr_low, u8 addr_high, union uw_ec_read_retur
 /**
  * EC address write through WMI
  */
-static u32 uw_ec_write_addr_wmi(u8 addr_low, u8 addr_high, u8 data_low, u8 data_high, union uw_ec_write_return *output)
+static int uw_ec_write_addr_wmi(u8 addr_low, u8 addr_high, u8 data_low, u8 data_high, union uw_ec_write_return *output)
 {
 	u32 uw_data[10];
-	u32 ret = uw_wmi_ec_evaluate(addr_low, addr_high, data_low, data_high, 0, uw_data);
+	u32 arg = ((u32)data_high << 24) | ((u32)data_low << 16) |
+		  ((u32)addr_high << 8) | ((u32)addr_low);
+
+	int ret = uw_wmi_ec_evaluate(UNIWILL_WMI_FUNCTION_WRITE, arg, uw_data);
 	output->dword = uw_data[0];
+
+	if (output->dword == 0xfefefefe) {
+		pr_err("WMI write error, addr: 0x%02x%02x, data: %0#4x\n", addr_high, addr_low, data_low);
+		ret = -EIO;
+	}
+
 	return ret;
 }
 
 /**
  * Direct EC address read
  */
-static u32 uw_ec_read_addr_direct(u8 addr_low, u8 addr_high, union uw_ec_read_return *output)
+static int uw_ec_read_addr_direct(u8 addr_low, u8 addr_high, union uw_ec_read_return *output)
 {
-	u32 result;
-	u8 tmp, count, flags;
+	int result;
+	int count;
+	u8 tmp, flags;
 	bool ready;
 	bool bflag = false;
 
@@ -164,6 +187,7 @@ static u32 uw_ec_read_addr_direct(u8 addr_low, u8 addr_high, union uw_ec_read_re
 		output->bytes.data_high = tmp;
 		result = 0;
 	} else {
+		pr_err("uw ec read timeout, addr: 0x%02x%02x\n", addr_high, addr_low);
 		output->dword = 0xfefefefe;
 		result = -EIO;
 	}
@@ -175,15 +199,19 @@ static u32 uw_ec_read_addr_direct(u8 addr_low, u8 addr_high, union uw_ec_read_re
 	if (bflag)
 		pr_debug("addr: 0x%02x%02x value: %0#4x result: %d\n", addr_high, addr_low, output->bytes.data_low, result);
 
+	if ((UW_EC_BUSY_WAIT_CYCLES - count) > 1)
+		pr_debug("read wait count: %i", (UW_EC_BUSY_WAIT_CYCLES - count));
+
 	// pr_debug("addr: 0x%02x%02x value: %0#4x result: %d\n", addr_high, addr_low, output->bytes.data_low, result);
 
 	return result;
 }
 
-static u32 uw_ec_write_addr_direct(u8 addr_low, u8 addr_high, u8 data_low, u8 data_high, union uw_ec_write_return *output)
+static int uw_ec_write_addr_direct(u8 addr_low, u8 addr_high, u8 data_low, u8 data_high, union uw_ec_write_return *output)
 {
-	u32 result = 0;
-	u8 tmp, count, flags;
+	int result = 0;
+	int count;
+	u8 tmp, flags;
 	bool ready;
 	bool bflag = false;
 
@@ -225,6 +253,7 @@ static u32 uw_ec_write_addr_direct(u8 addr_low, u8 addr_high, u8 data_low, u8 da
 		output->bytes.data_high = data_high;
 		result = 0;
 	} else {
+		pr_err("uw ec write timeout, addr: 0x%02x%02x, value: %0#4x\n", addr_high, addr_low, data_low);
 		output->dword = 0xfefefefe;
 		result = -EIO;
 	}
@@ -234,14 +263,17 @@ static u32 uw_ec_write_addr_direct(u8 addr_low, u8 addr_high, u8 data_low, u8 da
 	if (bflag)
 		pr_debug("addr: 0x%02x%02x value: %0#4x result: %d\n", addr_high, addr_low, data_low, result);
 
+	if ((UW_EC_BUSY_WAIT_CYCLES - count) > 1)
+		pr_debug("write wait count: %i", (UW_EC_BUSY_WAIT_CYCLES - count));
+
 	mutex_unlock(&uniwill_ec_lock);
 
 	return result;
 }
 
-u32 uw_wmi_read_ec_ram(u16 addr, u8 *data)
+static int uw_wmi_read_ec_ram(u16 addr, u8 *data)
 {
-	u32 result;
+	int result;
 	u8 addr_low, addr_high;
 	union uw_ec_read_return output;
 
@@ -261,9 +293,9 @@ u32 uw_wmi_read_ec_ram(u16 addr, u8 *data)
 	return result;
 }
 
-u32 uw_wmi_write_ec_ram(u16 addr, u8 data)
+static int uw_wmi_write_ec_ram(u16 addr, u8 data)
 {
-	u32 result;
+	int result;
 	u8 addr_low, addr_high, data_low, data_high;
 	union uw_ec_write_return output;
 
@@ -283,7 +315,8 @@ u32 uw_wmi_write_ec_ram(u16 addr, u8 data)
 struct uniwill_interface_t uniwill_wmi_interface = {
 	.string_id = UNIWILL_INTERFACE_WMI_STRID,
 	.read_ec_ram = uw_wmi_read_ec_ram,
-	.write_ec_ram = uw_wmi_write_ec_ram
+	.write_ec_ram = uw_wmi_write_ec_ram,
+	.wmi_evaluate = uw_wmi_ec_evaluate
 };
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 3, 0)
@@ -302,7 +335,7 @@ static int uniwill_wmi_probe(struct wmi_device *wdev, const void *dummy_context)
 		wmi_has_guid(UNIWILL_WMI_MGMT_GUID_BA) &&
 		wmi_has_guid(UNIWILL_WMI_MGMT_GUID_BB) &&
 		wmi_has_guid(UNIWILL_WMI_MGMT_GUID_BC);
-
+	
 	if (!status) {
 		pr_debug("probe: At least one Uniwill GUID missing\n");
 		return -ENODEV;
@@ -371,17 +404,20 @@ module_wmi_driver(uniwill_wmi_driver);
 
 MODULE_AUTHOR("TUXEDO Computers GmbH <tux@tuxedocomputers.com>");
 MODULE_DESCRIPTION("Driver for Uniwill WMI interface");
-MODULE_VERSION("0.0.2");
 MODULE_LICENSE("GPL");
 
 /*
  * If set to true, the module will use the replicated WMI functions
  * (direct ec_read/ec_write) to read and write to the EC RAM instead
- * of the original. Since the original functions, in all observed cases,
- * use excessive delays, they are not preferred.
+ * of the original (WMI).
+ *
+ * The original functions didn't use to be
+ * preferred since they use large delays in the I/O loop. However,
+ * they have proven to be more stable and are therefore set as
+ * the current default.
  */
 module_param_cb(ec_direct_io, &param_ops_bool, &uniwill_ec_direct, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
-MODULE_PARM_DESC(ec_direct_io, "Do not use WMI methods to read/write EC RAM (default: true).");
+MODULE_PARM_DESC(ec_direct_io, "Do not use WMI methods to read/write EC RAM (default: false).");
 
 MODULE_DEVICE_TABLE(wmi, uniwill_wmi_device_ids);
 MODULE_ALIAS_UNIWILL_WMI();
