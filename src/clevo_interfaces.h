@@ -64,10 +64,17 @@
 
 #define CLEVO_CMD_SET_KB_WHITE_LEDS	0x27 // Set brightness of white only keyboard backlights
 #define CLEVO_CMD_SET_KB_RGB_LEDS	0x67 // Used to set color, brightness, blinking pattern, etc.
+#define CLEVO_METHOD_ID_SET_ZONEKB_LEDS 0x04 // Only on certain machines (m2g6)
 #define CLEVO_CMD_SET_KB_LEDS_SUB_RGB_ZONE_0		0xF0000000 // 1-zone RGB and 3-zone RGB left
 #define CLEVO_CMD_SET_KB_LEDS_SUB_RGB_ZONE_1		0xF1000000 // 3-zone RGB center
 #define CLEVO_CMD_SET_KB_LEDS_SUB_RGB_ZONE_2		0xF2000000 // 3-Zone RGB right
 #define CLEVO_CMD_SET_KB_LEDS_SUB_RGB_ZONE_3		0xF3000000 // Unused on all known Clevo devices
+// Internal-only IDs used for the ZoneKB interface on the M2G6, the driver doesn't actually do anything with these at the moment
+#define CLEVO_CMD_SET_KB_LEDS_SUB_RGB_ZONE_ZKBL         0xF3000001 // left
+#define CLEVO_CMD_SET_KB_LEDS_SUB_RGB_ZONE_ZKBC         0xF3000002 // center
+#define CLEVO_CMD_SET_KB_LEDS_SUB_RGB_ZONE_ZKBR         0xF3000003 // right
+#define CLEVO_CMD_SET_KB_LEDS_SUB_RGB_ZONE_ZKBN         0xF3000004 // numpad
+#define CLEVO_CMD_SET_KB_LEDS_SUB_RGB_ZONE_ZKBB         0xF3000005 // lightbar
 #define CLEVO_CMD_SET_KB_LEDS_SUB_RGB_BRIGHTNESS	0xF4000000
 
 #define CLEVO_CMD_OPT			0x79
@@ -84,6 +91,7 @@ int clevo_keyboard_add_interface(struct clevo_interface_t *new_interface);
 int clevo_keyboard_remove_interface(struct clevo_interface_t *interface);
 int clevo_evaluate_method(u8 cmd, u32 arg, u32 *result);
 int clevo_evaluate_method2(u8 cmd, u32 arg, union acpi_object **result);
+int clevo_evaluate_method_pkgbuf(u8 cmd, u8 *arg, u32 length, union acpi_object **result);
 int clevo_get_active_interface_id(char **id_str);
 
 #define MODULE_ALIAS_CLEVO_WMI() \

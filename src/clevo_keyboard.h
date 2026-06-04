@@ -146,7 +146,7 @@ int clevo_evaluate_method2(u8 cmd, u32 arg, union acpi_object **result)
 }
 EXPORT_SYMBOL(clevo_evaluate_method2);
 
-static int clevo_evaluate_method_pkgbuf(u8 cmd, u8 *arg, u32 length, union acpi_object **result)
+int clevo_evaluate_method_pkgbuf(u8 cmd, u8 *arg, u32 length, union acpi_object **result)
 {
 	if (IS_ERR_OR_NULL(active_clevo_interface)) {
 		pr_err("clevo_keyboard: no active interface while attempting cmd %02x\n", cmd);
@@ -154,6 +154,7 @@ static int clevo_evaluate_method_pkgbuf(u8 cmd, u8 *arg, u32 length, union acpi_
 	}
 	return active_clevo_interface->method_call_pkgbuf(cmd, arg, length, result);
 }
+EXPORT_SYMBOL(clevo_evaluate_method_pkgbuf);
 
 int clevo_evaluate_method(u8 cmd, u32 arg, u32 *result)
 {
