@@ -592,7 +592,8 @@ int clevo_leds_init(struct platform_device *dev)
 	// known. We therefore detect by DMI.
 	if (dmi_match(DMI_PRODUCT_NAME, "X56xWNx")
 		&& (dmi_match(DMI_BIOS_VERSION, "1.07.07S3min29")
-			|| dmi_match(DMI_BIOS_VERSION, "1.07.13RSG2MIN29"))) {
+			|| dmi_match(DMI_BIOS_VERSION, "1.07.13RSG2MIN29")
+			|| dmi_match(DMI_BIOS_VERSION, "1.07.13S3"))) {
 		clevo_kb_backlight_type = CLEVO_KB_BACKLIGHT_TYPE_5_ZONE_RGB;
 	}
 
