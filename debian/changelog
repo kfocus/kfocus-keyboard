@@ -1,15 +1,9 @@
-kfocus-keyboard (4.22.2-0kfocus1~alpha2) resolute; urgency=medium
-
-  * Re-integrate support for M2 GEN 6 keyboard backlights (#6584)
-  * Add M2 GEN 7 support (#6584)
-
- -- Aaron Rainbolt <arainbolt@kfocus.org>  Thu, 04 Jun 2026 23:39:31 -0500
-
-kfocus-keyboard (4.22.2-0kfocus1~alpha1) resolute; urgency=medium
+kfocus-keyboard (4.22.2-0kfocus1) resolute; urgency=medium
 
   * Upgrade to latest tuxedo-drivers code (#6584)
+  * Add M2 GEN 7 support (#6584)
 
- -- Aaron Rainbolt <arainbolt@kfocus.org>  Thu, 14 May 2026 10:43:46 -0500
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Tue, 07 Jul 2026 15:37:35 -0500
 
 kfocus-keyboard (3.1.4-0kfocus9) noble; urgency=medium
 
