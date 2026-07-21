@@ -231,12 +231,14 @@ static void clevo_leds_set_brightness_mc_zonekb(struct led_classdev *led_cdev, e
 	 * ]
 	 */
 
+	u8 bright_byte = (u8)brightness;
+
 	mutex_lock(&zonekb_mtx);
 
 	cmd_buf[0x00] = 0x2C;
 	cmd_buf[0x01] = 0xFF;
 
-	cmd_buf[0x10] = clevo_mcled_cdevs_zonekb[0].led_cdev.brightness;;
+	cmd_buf[0x10] = bright_byte;
 
 	cmd_buf[0x11] = clevo_mcled_cdevs_zonekb_subleds[0][0].intensity;
 	cmd_buf[0x12] = clevo_mcled_cdevs_zonekb_subleds[0][1].intensity;
@@ -258,13 +260,13 @@ static void clevo_leds_set_brightness_mc_zonekb(struct led_classdev *led_cdev, e
 	cmd_buf[0x1E] = clevo_mcled_cdevs_zonekb_subleds[4][1].intensity;
 	cmd_buf[0x1F] = clevo_mcled_cdevs_zonekb_subleds[4][2].intensity;
 
-	cmd_buf[0x20] = clevo_mcled_cdevs_zonekb[0].led_cdev.brightness;
+	cmd_buf[0x20] = bright_byte;
 
-	clevo_mcled_cdevs_zonekb[0].led_cdev.brightness = brightness;
-	clevo_mcled_cdevs_zonekb[1].led_cdev.brightness = brightness;
-	clevo_mcled_cdevs_zonekb[2].led_cdev.brightness = brightness;
-	clevo_mcled_cdevs_zonekb[3].led_cdev.brightness = brightness;
-	clevo_mcled_cdevs_zonekb[4].led_cdev.brightness = brightness;
+	clevo_mcled_cdevs_zonekb[0].led_cdev.brightness = bright_byte;
+	clevo_mcled_cdevs_zonekb[1].led_cdev.brightness = bright_byte;
+	clevo_mcled_cdevs_zonekb[2].led_cdev.brightness = bright_byte;
+	clevo_mcled_cdevs_zonekb[3].led_cdev.brightness = bright_byte;
+	clevo_mcled_cdevs_zonekb[4].led_cdev.brightness = bright_byte;
 
 	clevo_evaluate_method_pkgbuf(CLEVO_METHOD_ID_SET_ZONEKB_LEDS, cmd_buf, 256, NULL);
 
