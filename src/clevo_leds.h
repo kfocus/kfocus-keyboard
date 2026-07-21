@@ -72,6 +72,7 @@ static bool dmi_string_in(enum dmi_field f, const char *str);
 
 static enum clevo_kb_backlight_types clevo_kb_backlight_type = CLEVO_KB_BACKLIGHT_TYPE_NONE;
 static bool leds_initialized = false;
+static DEFINE_MUTEX(zonekb_mtx);
 
 /**
  * Color scaling quirk list
@@ -230,6 +231,8 @@ static void clevo_leds_set_brightness_mc_zonekb(struct led_classdev *led_cdev, e
 	 * ]
 	 */
 
+	mutex_lock(&zonekb_mtx);
+
 	cmd_buf[0x00] = 0x2C;
 	cmd_buf[0x01] = 0xFF;
 
@@ -264,6 +267,8 @@ static void clevo_leds_set_brightness_mc_zonekb(struct led_classdev *led_cdev, e
 	clevo_mcled_cdevs_zonekb[4].led_cdev.brightness = brightness;
 
 	clevo_evaluate_method_pkgbuf(CLEVO_METHOD_ID_SET_ZONEKB_LEDS, cmd_buf, 256, NULL);
+
+	mutex_unlock(&zonekb_mtx);
 }
 
 static struct led_classdev clevo_led_cdev = {
@@ -516,6 +521,7 @@ int clevo_leds_init(struct platform_device *dev)
 	int status;
 	union acpi_object *result;
 	u32 result_fallback;
+	mutex_init(&zonekb_mtx);
 
 	for (i = 0; i < 3; ++i) {
 		status = clevo_evaluate_method2(CLEVO_CMD_GET_SPECS, 0, &result);
