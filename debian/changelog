@@ -1,3 +1,10 @@
+kfocus-keyboard (4.22.2-0kfocus2) resolute; urgency=medium
+
+  * Implement mutex locking for m2g6/m2g7 color set (#6567)
+  * Fix brightness set routine for m2g6/m2g7 (#6567)
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Tue, 21 Jul 2026 13:13:29 -0500
+
 kfocus-keyboard (4.22.2-0kfocus1) resolute; urgency=medium
 
   * Upgrade to latest tuxedo-drivers code (#6584)
