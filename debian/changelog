@@ -1,3 +1,9 @@
+kfocus-keyboard (4.22.2-0kfocus3) UNRELEASED; urgency=medium
+
+  * Fix for Linux >= 6.11
+
+ -- Erich Eickmeyer <eeickmeyer@ubuntu.com>  Wed, 23 Sep 2026 16:35:40 -0700
+
 kfocus-keyboard (4.22.2-0kfocus2) resolute; urgency=medium
 
   * Implement mutex locking for m2g6/m2g7 color set (#6567)
