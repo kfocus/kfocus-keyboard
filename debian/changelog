@@ -1,8 +1,8 @@
-kfocus-keyboard (3.1.4-0kfocus9~beta2) noble; urgency=medium
+kfocus-keyboard (3.1.4-0kfocus9) noble; urgency=medium
 
   * Patched to support kernels >= 6.17 (#6558)
 
- -- Aaron Rainbolt <arainbolt@kfocus.org>  Fri, 07 Aug 2026 09:40:49 -0500
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Fri, 09 Oct 2026 15:15:01 -0500
 
 kfocus-keyboard (3.1.4-0kfocus8) noble; urgency=medium
 
