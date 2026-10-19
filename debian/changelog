@@ -1,3 +1,10 @@
+kfocus-keyboard (4.25.0-0kfocus1~beta1) resolute; urgency=medium
+
+  * Upgrade to latest tuxedo-drivers code, retain added M2 GEN 7 support
+    (#6951)
+
+ -- Aaron Rainbolt <arainbolt@kfocus.org>  Thu, 05 Nov 2026 17:20:23 -0600
+
 kfocus-keyboard (4.22.2-0kfocus2) resolute; urgency=medium
 
   * Implement mutex locking for m2g6/m2g7 color set (#6567)
